@@ -183,8 +183,8 @@ deviation-desk/
 │   ├── DOMAIN.md             ← data model, realism rules, seed company
 │   └── DESIGN.md             ← visual system, voxel style, UI trust rules
 ├── db/
-│   ├── schema.sql            ← initial schema (becomes the first migration)
-│   └── migrations/           ← numbered SQL migrations (create in Phase 1)
+│   └── migrations/           ← numbered SQL migrations (0001_init.sql is the schema)
+├── supabase/config.toml      ← local Supabase stack (npm run db:start)
 ├── src/
 │   ├── app/                  ← Next.js routes (create in Phase 4)
 │   ├── components/           ← UI components; voxel/ for R3F scene
@@ -197,7 +197,7 @@ deviation-desk/
 │   ├── workflows/            ← Inngest functions (agent chains, sim clock, sweeps)
 │   ├── monitoring/           ← Layer-1 watchers (non-AI rules)
 │   ├── sim/                  ← scenario schema, spread engine, saboteurs, clock
-│   ├── db/                   ← typed query helpers (create in Phase 1)
+│   ├── db/                   ← Postgres client, migrations, typed queries, trace, cloning, seed
 │   └── lib/                  ← shared utilities
 ├── evals/
 │   ├── scenarios/            ← seeded scenario fixtures with hidden truths
@@ -330,8 +330,19 @@ Safety emergencies (principle 7) bypass agents entirely.
 ## 11. Database rules
 
 - Postgres is the source of truth. All schema changes are numbered migrations in `db/migrations/`.
-- Every domain table has `world_id uuid not null` and `company_id uuid not null`, indexed together.
-- `incident_events`, `decision_records`, `approvals`, and `agent_runs` are append-only.
+- Every domain table has `world_id uuid not null` and `company_id uuid not null`. World-scoped rows
+  use the primary key `(world_id, id)`, and every foreign key between them includes `world_id`, so
+  the database itself rejects cross-world links. `(world_id, company_id)` references
+  `worlds(id, company_id)`, so a row's company always matches its world. Indexes lead with `world_id`.
+- A drill clone copies twin rows changing only `world_id`: an object has the same id in every world.
+  New world-scoped tables must be added to `CLONED_TABLES` or `NOT_CLONED_TABLES`
+  (`src/db/create-drill-world.ts`); a test fails otherwise.
+- `incident_events`, `decision_records`, `approvals`, and `agent_runs` are append-only, enforced by
+  triggers. In a live world an approval without a `person_id` is rejected (principle 1).
+- RLS is enabled on every table. Until per-company policies arrive with Supabase Auth (Phase 4),
+  the public API roles can read nothing; server code connects with `DATABASE_URL`.
+- Server code queries with `postgres` (postgres.js) via `getSql()` in `src/db/client.ts`. Columns come
+  back camelCase. `supabase-js` is for realtime and auth in the UI only.
 - Use recursive CTEs with a depth limit for impact tracing.
 - Add indexes for every column agents filter on (ids, equipment, lot, dates, incident).
 - Never store secrets in the database. Use environment variables.
@@ -382,9 +393,12 @@ Set up in Phase 0; keep this list current.
 ```
 npm run dev            # Next.js dev server
 npm run inngest        # Inngest dev server
-npm run db:migrate     # apply migrations
+npm run db:start       # start local Supabase (Docker); db:stop to stop it
+npm run db:migrate     # apply db/migrations to DATABASE_URL
 npm run db:seed        # seed the Helix Biologics demo company into the live world
-npm run test           # unit tests
+npm run db:reset       # wipe the local database, migrate, and seed
+npm run test           # unit tests (no database)
+npm run test:db        # database tests (needs db:start; each file seeds its own company)
 npm run test:e2e       # Playwright
 npm run evals          # scenario eval suite
 npm run typecheck      # tsc --noEmit
@@ -446,11 +460,21 @@ Phase 0 notes:
   until Phase 4 (`npx playwright install chromium`).
 
 ### Phase 1 — The twin
-- [ ] Turn `db/schema.sql` into migration `0001_init.sql`; set up Supabase locally.
-- [ ] Typed query helpers in `src/db/`.
-- [ ] Seed script for the Helix Biologics demo company (`docs/DOMAIN.md` §Seed).
-- [ ] Impact trace query (recursive CTE, depth limit) with tests.
-- [ ] World cloning: `createDrillWorld(fromWorldId, seed)`.
+- [x] Turn `db/schema.sql` into migration `0001_init.sql`; set up Supabase locally.
+- [x] Typed query helpers in `src/db/`.
+- [x] Seed script for the Helix Biologics demo company (`docs/DOMAIN.md` §Seed).
+- [x] Impact trace query (recursive CTE, depth limit) with tests.
+- [x] World cloning: `createDrillWorld(fromWorldId, seed)`.
+
+Phase 1 notes:
+- Migrations run with our own runner (`src/db/migrate.ts`), not `supabase db push`, so the same
+  command works locally and against the hosted database. Applied files are checksummed: never edit
+  a migration that has run; add a new one.
+- `traceImpact` carries (node, depth, parent) through the CTE instead of whole paths, so cost grows
+  with edges × depth rather than with the number of paths. Depth 6 on the seed takes ~4 ms.
+  The materialized view from §12 is deferred until a real query needs it.
+- Scripts run under `tsx --conditions=react-server` so modules that import `server-only` load
+  outside Next.js; Vitest aliases `server-only` to its empty module for the same reason.
 
 ### Phase 2 — First agent chain + evals
 - [ ] Implement the runner (§7.3) and tools: `query_twin`, `trace_impact`, `get_incident`,

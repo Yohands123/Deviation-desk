@@ -7,11 +7,15 @@ Schema starting point: `db/schema.sql`.
 
 ## Entities
 
-Every domain table carries `company_id` and `world_id`.
+Every domain table carries `company_id` and `world_id`; world-scoped rows are keyed by
+`(world_id, id)` (see `CLAUDE.md` §11). Human-facing codes are unique per world: `batch_code`,
+`lot_code`, `shipment_code`, `order_code`, incident `code`. `src/db/resolve-ref.ts` maps a code to
+its row id (`{ table: "batches", code: "A-2231" }`).
 
 **Structure**
-- `sites` → `rooms` (department, room type, cleanliness class) → `equipment` (type, status, last maintenance).
-- `production_lines` belong to a room and use equipment.
+- `sites` → `rooms` (department, room type, cleanliness class `grade_a`–`grade_d` or `unclassified`)
+  → `equipment` (type, status, last maintenance).
+- `production_lines` belong to a room; equipment that belongs to a line carries `line_id`.
 
 **Materials and product**
 - `materials` (e.g. vial stoppers, gaskets, media) supplied by `suppliers` (approved flag per material).
@@ -37,13 +41,19 @@ Every domain table carries `company_id` and `world_id`.
 
 ## Impact graph
 
-Nodes: rooms, equipment, material lots, batches, inventory lots, shipments, orders, customers.
-Edges:
+Nodes: rooms, equipment, material lots, batches, inventory lots, shipments, orders, locations
+(customers and trial sites are locations). Edges (the `impact_edges` view):
+- room → equipment in it
 - batch ↔ equipment (`batch_equipment_usage`)
 - batch ↔ material lot (`batch_material_usage`)
-- batch → inventory lot → shipment (`shipment_items`) → order → customer / trial site
+- batch → inventory lot → shipment (`shipment_items`) → order → destination;
+  shipment → its destination directly
 
-`trace_impact(world_id, start_node, max_depth)` walks these with a recursive CTE.
+Usage edges go both ways, so a shared lot or machine links batches to each other. Distribution
+edges go downstream only. `traceImpact(sql, worldId, start, maxDepth ≤ 6)` in
+`src/db/trace-impact.ts` walks these with a recursive CTE and returns each reached node once, with
+its depth, the edge that reached it, its status, and a shortest path from the start. Held stock is
+still traversed; its status shows where containment already cuts the spread.
 
 ## Severity scale
 
@@ -123,3 +133,27 @@ and one approved backup gasket supplier.
 
 **Records with a deliberate gap:** the Oct 9 cleaning record for Fill Room 3 is missing (for the
 Devil's Advocate), and the Oct 3 maintenance log notes gasket wear on Filler 3.
+
+### As seeded (`src/db/seed/helix-biologics.ts`)
+
+All data is fixed relative to `SEED_ANCHOR` (Mon 12 Oct 2026, 09:00 site time) and uses the seeded
+PRNG, so every seed is identical.
+
+- **Product:** HLX-201 injection, 100 mg/mL (refrigerated, 14-day sterility test).
+- **Gaskets:** Filler 3 switched from lot G-69 to G-77 on 17 Sep; Filler 4 on 30 Sep.
+- **Batches:** A-2227 (L4), A-2228 (L3), A-2229 (L4) released on G-69; A-2230 (L3) released on
+  G-77 and partly shipped; A-2231 (L3, sterility results due 12 Oct), A-2232 (L3), A-2233 (L4, G-69),
+  A-2234 (L4) in testing; A-2235 (L3) in production. A-2231 and A-2234 both use G-77.
+- **Suppliers:** Kestrel Seals (gaskets, G-69 and G-77), Arbor Polymer Seals (approved backup
+  gaskets), Nordvial Closures (stoppers, single source), Meridian Glassworks (vials).
+- **Locations:** Warehouse Bays A–D (C is quarantine), Dock, Montreal DC, Trial sites 104 and 212,
+  Northshore Hospital Pharmacy, Lakeview Specialty Pharmacy.
+- **Shipments:** SH-115 (A-2230, delivered to Northshore), SH-117 (A-2229, in transit to trial
+  site 104), SH-118 (800 units of A-2231 at the dock, quarantine transfer to Montreal DC),
+  SH-119 (A-2230, planned to Lakeview).
+- **Orders:** ORD-1041 to ORD-1047; ORD-1045 is the patient-critical order for trial site 212,
+  due 14 Oct 08:00 (47 hours after the anchor). Clean released stock (G-69) sits at Montreal DC.
+- **People:** 14, including Priya Raman (Plant Manager), Marcus Bell (Clinical Ops Manager),
+  Elena Duarte (QA Director), Tomás Reyes (Supply Chain Lead), Hannah Okafor (Regulatory Affairs).
+- **Sensors:** daily EM swabs for Fill Room 3 and Line 4 (30 days each; Fill Room 3 reads 0, 1, 2, 3
+  CFU on 9–12 Oct), plus SH-117 truck temperatures inside 2–8 °C.
