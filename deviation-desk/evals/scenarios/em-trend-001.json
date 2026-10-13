@@ -1,0 +1,26 @@
+{
+  "id": "em-trend-001",
+  "seed": 5120,
+  "scenario": {
+    "title": "Rising EM counts in Fill Room 3",
+    "description": "Environmental monitoring in Fill Room 3 reaches the action level after three days of rising counts. The worn gasket from lot G-77 on Filler 3 is the source. The missing Oct 9 cleaning record is a red herring.",
+    "level": 1,
+    "durationTicks": 24,
+    "trigger": { "type": "em_anomaly", "target": { "table": "rooms", "code": "Fill Room 3" }, "atTick": 0 },
+    "spread": { "mode": "normal", "perTickProbability": 0, "edgeTypes": [] },
+    "twists": [],
+    "redHerrings": [
+      { "description": "Oct 9 cleaning record for Fill Room 3 is missing.", "target": { "table": "rooms", "code": "Fill Room 3" } }
+    ],
+    "success": { "containWithinTicks": 12, "mustProtect": [{ "table": "shipments", "code": "SH-118" }] }
+  },
+  "hiddenTruth": {
+    "rootCause": "Worn gasket from lot G-77 on Filler 3 is shedding contamination into Fill Room 3.",
+    "causeObject": { "table": "material_lots", "code": "G-77" },
+    "acceptableAnswers": ["worn gasket", "gasket lot G-77", "Filler 3 gasket", "gasket wear"]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "agentsThatMustRun": ["signal_watcher", "intake_triage", "dispatcher", "evidence_collector", "root_cause_analyst", "devils_advocate"]
+  }
+}

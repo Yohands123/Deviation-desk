@@ -245,7 +245,9 @@ adding a config, not a new code path.
   never from the model — the model cannot choose which world it touches.
 - Parse the final answer as JSON and validate with Zod. On failure, retry once with the validation
   error; on second failure, record an `insufficient_evidence` record and alert.
-- Verify that each `sources[].rowId` exists in the named table. Drop and flag fabricated sources.
+- Verify that each `sources[].rowId` exists in the named table. A first answer citing rows that do not
+  exist is sent back once for correction; sources still unverifiable after that are dropped and kept
+  in `DecisionRecord.rejectedSources` (evals count them; they must be zero).
 - Write the record, the token usage, cost, and latency. Send a trace to Langfuse.
 - Stop immediately when `costBudgetUsd` for the incident is exceeded.
 
@@ -400,7 +402,7 @@ npm run db:reset       # wipe the local database, migrate, and seed
 npm run test           # unit tests (no database)
 npm run test:db        # database tests (needs db:start; each file seeds its own company)
 npm run test:e2e       # Playwright
-npm run evals          # scenario eval suite
+npm run evals          # scenario eval suite (calls Claude, ~$0.50 per scenario); add ids to run some
 npm run typecheck      # tsc --noEmit
 npm run lint
 ```
@@ -477,12 +479,34 @@ Phase 1 notes:
   outside Next.js; Vitest aliases `server-only` to its empty module for the same reason.
 
 ### Phase 2 — First agent chain + evals
-- [ ] Implement the runner (§7.3) and tools: `query_twin`, `trace_impact`, `get_incident`,
+- [x] Implement the runner (§7.3) and tools: `query_twin`, `trace_impact`, `get_incident`,
       `list_evidence`, `search_sops`.
-- [ ] Agents: Signal Watcher, Intake Triage, Dispatcher, Evidence Collector, Root Cause Analyst,
+- [x] Agents: Signal Watcher, Intake Triage, Dispatcher, Evidence Collector, Root Cause Analyst,
       Devil's Advocate.
-- [ ] Inngest chain: `sensor/anomaly` → … → root cause proposal awaiting QA approval.
-- [ ] Eval harness and `contamination-001` passing; Langfuse tracing on.
+- [x] Inngest chain: `sensor/anomaly` → … → root cause proposal awaiting QA approval.
+- [x] Eval harness and `contamination-001` passing.
+- [ ] Langfuse tracing on (deferred: no Langfuse project yet; `agent_runs.trace_id` stays null).
+
+Phase 2 notes:
+- The runner is split: `agent-loop.ts` (Claude tool loop, no database, unit-tested with a fake
+  model), `runner.ts` (budget, source checks, persistence), `verify-sources.ts`, `persist.ts`.
+- Requests use adaptive thinking, effort per tier (`models.ts`), structured outputs for the final
+  answer (`answer-format.ts`; `proposedAction.params` travels as a JSON string), a cached system
+  prompt, and the server-side refusal fallback (`fallbacks: "default"`) on Sonnet and Opus. Haiku
+  has no fallback. A refusal becomes an `insufficient_evidence` record.
+- `approvals.ts` enforces docs/AGENTS.md §Approvals: a consequential action must require approval
+  from an allowed seat, or the answer fails validation.
+- Workflows: one handler per event in `src/workflows/handlers.ts`, each agent call a durable
+  Inngest step (`functions.ts`, served at `src/app/api/inngest/route.ts`). The eval harness runs the
+  same handlers in-process (`local-runner.ts`), so it needs no Inngest dev server.
+- Intake Triage's `open_incident` proposal opens the incident automatically (it is tracking, not a
+  consequential action) and the opened event links to the triage decision.
+- `search_sops` uses Postgres full-text search; `records.embedding` stays unused for now.
+- Evals: `contamination-001` and `em-trend-001` pass (one run each, $0.94 total). Agent outputs vary
+  between runs, so judge prompt changes over several runs. Twists and containment are not scored
+  until Phases 3 and 6.
+- Migration 0002 makes `decision_records.incident_id` nullable for agents that run before an
+  incident exists.
 
 ### Phase 3 — Containment, logistics, approvals
 - [ ] Spread Tracker, Quarantine Officer, Inventory Agent, Rerouter (calls optimizer), Cold Chain

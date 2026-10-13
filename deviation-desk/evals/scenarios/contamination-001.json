@@ -28,6 +28,6 @@
   },
   "expectations": {
     "maxFabricatedSources": 0,
-    "agentsThatMustRun": ["evidence_collector", "root_cause_analyst", "devils_advocate"]
+    "agentsThatMustRun": ["intake_triage", "dispatcher", "evidence_collector", "root_cause_analyst", "devils_advocate"]
   }
 }

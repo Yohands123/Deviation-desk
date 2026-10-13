@@ -130,8 +130,11 @@ describe("Helix Biologics seed (docs/DOMAIN.md §Seed)", () => {
     const values = async (worldId: string) =>
       (
         await sql<{ value: string }[]>`
-          select value from sensor_readings where world_id = ${worldId}
-          order by recorded_at, subject_table, metric`
+          select s.value from sensor_readings s
+          join twin_nodes t on t.world_id = s.world_id and t.node_table = s.subject_table and t.node_id = s.subject_id
+          where s.world_id = ${worldId}
+          -- Rooms share timestamps, so order by subject name too for a stable comparison.
+          order by s.recorded_at, s.subject_table, t.label, s.metric`
       ).map((r) => r.value);
     expect(await values(other.worldId)).toEqual(await values(helix.worldId));
   });

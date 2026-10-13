@@ -4,14 +4,15 @@ import type { z } from "zod";
 export interface ToolContext {
   worldId: string;
   companyId: string;
-  incidentId: string;
+  /** Null when the agent runs before an incident exists (e.g. the Signal Watcher). */
+  incidentId: string | null;
   agentId: string;
 }
 
-export interface AgentTool<I extends z.ZodTypeAny = z.ZodTypeAny> {
+export interface AgentTool<I extends z.ZodType = z.ZodType> {
   name: string;
   description: string;
-  input: I; // validated before run()
-  jsonSchema: Record<string, unknown>; // sent to the Claude API as input_schema
+  /** Validates the model's input before run(). Also the source of the JSON schema sent to the API. */
+  input: I;
   run: (input: z.infer<I>, ctx: ToolContext) => Promise<unknown>;
 }

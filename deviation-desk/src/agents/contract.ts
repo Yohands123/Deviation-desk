@@ -59,9 +59,12 @@ export type AgentAnswer = z.infer<typeof AgentAnswer>;
 
 export const DecisionRecord = z.object({
   agentId: z.string(),
-  incidentId: z.string(),
+  /** Null for agents that run before an incident exists (e.g. the Signal Watcher). */
+  incidentId: z.string().nullable(),
   worldId: z.string(),
   answer: AgentAnswer,
+  /** Sources the agent cited that do not exist in this world. Dropped from `answer` and kept here for audit and evals. */
+  rejectedSources: z.array(Source).default([]),
 });
 export type DecisionRecord = z.infer<typeof DecisionRecord>;
 
@@ -92,7 +95,8 @@ export const AgentConfig = z.object({
   allowedTools: z.array(z.string()),
   triggers: z.array(z.string()), // event names
   maxToolCalls: z.number().int().positive().default(8),
-  maxTokens: z.number().int().positive().default(2000),
+  // Adaptive thinking counts against max_tokens, so leave room; cost is bounded by costBudgetUsd.
+  maxTokens: z.number().int().positive().default(16000),
   costBudgetUsd: z.number().positive().default(0.5),
   drillOnly: z.boolean().default(false),
 });

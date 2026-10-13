@@ -21,9 +21,9 @@ Columns: **Tier** = model tier · **Wakes on** = triggering event(s) · **Tools*
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `evidence_collector` | Gather logs, cleaning and maintenance records, batch history, shifts, test results; flag gaps | standard | `incident/opened` (quality, equipment) | `query_twin`, `search_sops`, `get_records` | finding (evidence list) | QA Director | Draw conclusions |
-| `root_cause_analyst` | Propose ranked causes with evidence and confidence | deep | `evidence/updated` | `list_evidence`, `query_twin`, `trace_impact` | proposal (root cause) | QA Director | Accept its own conclusion |
-| `devils_advocate` | Argue against the leading theory; find disconfirming evidence | deep | `root_cause/proposed` | `list_evidence`, `query_twin` | finding (challenge) | QA Director | Propose actions |
+| `evidence_collector` | Gather logs, cleaning and maintenance records, batch history, EM readings, shifts, test results; flag gaps | standard | `incident/opened` (quality, equipment) | `query_twin`, `get_records`, `get_sensor_history`, `search_sops` | finding (evidence list) | QA Director | Draw conclusions |
+| `root_cause_analyst` | Propose ranked causes with evidence and confidence | deep | `evidence/updated` | `list_evidence`, `get_records`, `query_twin`, `trace_impact` | proposal (root cause) | QA Director | Accept its own conclusion |
+| `devils_advocate` | Argue against the leading theory; find disconfirming evidence | deep | `root_cause/proposed` | `list_evidence`, `get_records`, `query_twin` | finding (challenge) | QA Director | Propose actions |
 | `trial_runner` | Design a quick confirm/rule-out test with expected results and duration | standard | `root_cause/proposed`, `challenge/raised` | `query_twin`, `get_lab_capacity` | proposal (test) | QA Director | Schedule the test without approval |
 
 ## Containment
@@ -108,6 +108,19 @@ Which seat may approve which `proposedAction.type`:
 
 When a seat is AI-played, its approvals in **Live** mode are queued for a human with that role;
 AI seats may only auto-approve in **Drill** mode.
+
+Enforced in `src/agents/approvals.ts`: an answer proposing one of these actions without
+`requiresApproval` and an allowed `approvalSeat` fails validation.
+
+These action types are **not** consequential and need no approval; the workflow acts on them and
+logs the decision record that proposed them (parameter shapes: `src/agents/action-params.ts`):
+
+| Action type | Proposed by | What the workflow does |
+|---|---|---|
+| `confirm_signal` | Signal Watcher | Emits `signal/confirmed` for Intake Triage |
+| `open_incident` | Intake Triage | Opens the incident (code `DEV-0001`, …) and emits `incident/opened` |
+| `link_to_incident` | Intake Triage | Adds a `linked_report` event to the existing incident |
+| `activate_agents` | Dispatcher | Records `agents_activated`; only listed agents run for the incident |
 
 ---
 
