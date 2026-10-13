@@ -10,6 +10,8 @@ import { CITABLE_TABLES } from "@/agents/verify-sources";
 import { getSql, type Sql } from "@/db/client";
 import { GraphTable } from "@/db/rows";
 import { traceImpact } from "@/db/trace-impact";
+import { roomLookup, type RoomsOf } from "./room-lookup";
+import { buildSceneData } from "./scene-data";
 import {
   LIVE_SEATS,
   SEAT_LABELS,
@@ -118,33 +120,9 @@ interface ObjectRef {
   id: string | null;
 }
 
-/** Rooms that hold, or handled, each kind of graph node. */
-async function roomLookup(sql: Sql, worldId: string) {
-  const equipment = await sql<{ id: string; roomId: string }[]>`select id, room_id from equipment where world_id = ${worldId}`;
-  const batches = await sql<{ id: string; roomId: string }[]>`
-    select b.id, pl.room_id from batches b join production_lines pl on pl.world_id = b.world_id and pl.id = b.line_id
-    where b.world_id = ${worldId}`;
-  const lines = await sql<{ id: string; roomId: string }[]>`select id, room_id from production_lines where world_id = ${worldId}`;
-  const byType = await sql<{ id: string; roomType: string }[]>`select id, room_type from rooms where world_id = ${worldId}`;
-  const storage = byType.filter((r) => r.roomType === "storage").map((r) => r.id);
-  const shipping = byType.filter((r) => r.roomType === "shipping").map((r) => r.id);
-  const maps = {
-    rooms: new Map(byType.map((r) => [r.id, [r.id]])),
-    equipment: new Map(equipment.map((e) => [e.id, [e.roomId]])),
-    batches: new Map(batches.map((b) => [b.id, [b.roomId]])),
-    production_lines: new Map(lines.map((l) => [l.id, [l.roomId]])),
-  } as Record<string, Map<string, string[]>>;
-  return (table: string, id: string): string[] => {
-    if (table === "inventory_lots") return storage;
-    if (table === "shipments") return shipping;
-    return maps[table]?.get(id) ?? [];
-  };
-}
-
-async function buildMap(sql: Sql, worldId: string, objects: ObjectRef[]): Promise<{ map: MapRoom[]; spreadPaths: string[] }> {
+async function buildMap(sql: Sql, worldId: string, objects: ObjectRef[], roomsOf: RoomsOf): Promise<{ map: MapRoom[]; spreadPaths: string[] }> {
   const rooms = await sql<{ id: string; name: string; department: string; status: string; layout: { x: number; y: number; w: number; d: number } | null }[]>`
     select id, name, department, status, layout from rooms where world_id = ${worldId} order by name`;
-  const roomsOf = await roomLookup(sql, worldId);
   const critical = new Map<string, string[]>();
   const atRisk = new Map<string, string[]>();
   const note = (m: Map<string, string[]>, roomId: string, why: string) => m.set(roomId, [...(m.get(roomId) ?? []), why]);
@@ -251,19 +229,23 @@ export async function getIncidentRoom(viewer: Viewer, code: string): Promise<Inc
       };
     });
 
-  const { map, spreadPaths } = await buildMap(sql, w, objects);
+  const roomsOf = await roomLookup(sql, w);
+  const { map, spreadPaths } = await buildMap(sql, w, objects, roomsOf);
+  const pendingForMe = pendingFor(mySeat, cards);
+  const scene = await buildSceneData(sql, w, { map, cards, seats, mySeat }, roomsOf);
   return {
     incident: toSummary({ ...incident, pendingDecisions: cards.filter(isOpen).length }),
     objects: objects.map(({ table, code: c }) => ({ table, code: c })),
     seats,
     mySeat,
     cards,
-    pendingForMe: pendingFor(mySeat, cards),
+    pendingForMe,
     feed,
     evidence,
     map,
     spreadPaths,
     conflicts,
+    scene,
   };
 }
 

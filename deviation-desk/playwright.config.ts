@@ -9,7 +9,8 @@ export default defineConfig({
   // Tests share one fixture company; run them one at a time.
   workers: 1,
   use: { baseURL: "http://localhost:3000", trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Software WebGL so the 3D view renders in headless Chrome.
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] } } }],
   webServer: {
     command: "npm run dev",
     url: "http://localhost:3000/login",

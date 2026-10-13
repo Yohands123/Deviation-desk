@@ -187,7 +187,8 @@ deviation-desk/
 ├── supabase/config.toml      ← local Supabase stack (npm run db:start)
 ├── src/
 │   ├── app/                  ← Next.js routes: /login, /incidents, /incidents/[code], /report
-│   ├── components/           ← UI components (incident-room/); voxel/ for R3F scene (Phase 5)
+│   ├── components/           ← UI components: incident-room/, voxel/ (R3F scene, site view)
+│   ├── voxel/                ← voxel models, scene building, roles (pure, unit-tested)
 │   ├── incident-room/        ← viewer/session, room queries, view model, server actions
 │   ├── proxy.ts              ← session refresh + sign-in redirect (Next 16 "proxy", was middleware)
 │   ├── agents/
@@ -566,8 +567,27 @@ Phase 4 notes:
   Inngest when running) and a two-browser realtime update.
 
 ### Phase 5 — Voxel world
-- [ ] R3F isometric scene from twin rooms; instanced voxels; voxel workers by role.
-- [ ] Incident overlays: tint, particles, tape, halted lines, held trucks. Camera flies to seat's department.
+- [x] R3F isometric scene from twin rooms; instanced voxels; voxel workers by role.
+- [x] Incident overlays: tint, particles, tape, halted lines, held trucks. Camera flies to seat's department.
+
+Phase 5 notes:
+- Models are built in code (`src/voxel/models.ts`), not imported from MagicaVoxel: equipment,
+  trucks, workers by outfit. MagicaVoxel glTF models can replace them later behind the same shapes.
+- `buildStaticScene()` turns scene data into voxels; the renderer draws all static voxels as one
+  instanced mesh (one draw call). Scene data is built on the server (`incident-room/scene-data.ts`).
+- Workers: agents that worked on the incident (dressed by department, AI diamond overhead) and
+  seated people (dressed by seat). They stand in the room their cited sources point to and walk
+  there when the work is recent; a folder means a proposal is waiting for a person.
+- Overlays: status-tinted floors, particles over affected rooms, tape around rooms with held or
+  quarantined material, amber lights on halted equipment and lines, trucks at the dock with
+  status pins. Labels are DOM elements projected from 3D anchors (drei `Html` was dropped: its
+  per-label React roots raced with React 19 renders and lost labels).
+- Performance: three.js loads only for the 3D view, after the panels; rendering stops when the
+  scene is off screen; `PerformanceMonitor` falls back to the flat map on slow devices; WebGL
+  missing → flat map. Reduced motion stops all animation. Measured 14 fps under headless
+  software rendering (CPU); real-GPU frame rate has not been measured yet.
+- The 3D / flat choice is remembered per browser. The camera frames the seat's department
+  (Executive, Strategy and Observer see the whole site); other rooms dim.
 
 ### Phase 6 — Drill mode
 - [ ] Scenario schema, Scenario Builder, saboteurs with modes, seeded PRNG, facilitator controls.

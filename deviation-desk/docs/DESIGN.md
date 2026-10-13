@@ -89,6 +89,18 @@ Mode badge: Chase (orange), Scatter (blue), Frightened · reversed (light).
   each with an icon. On phones the decision card comes first.
 - Identifiers (codes, timestamps, short parameters) use IBM Plex Mono; prose stays in Plex Sans.
 
+## Voxel world as built (Phase 5)
+
+- Isometric orthographic camera from the open front-right; back walls on the far sides only, low
+  dividers between rooms, floors tinted Affected (orange) / At risk (amber) / Clear (neutral).
+- Room labels sit at each room's front-left corner and always include the status word, plus
+  "Taped off" where material is held. Held trucks get an orange "Held" pin; others "At dock".
+- Workers: gown + mask (containment), lab coat (investigation and the QA Director), hard hat
+  (operations), hi-vis vest (logistics), office wear (triage, regulatory, clinical), suit
+  (executive), hard hat + blueprint (strategy), magnifier (Auditor). Agents carry the AI diamond.
+- Clicking a worker opens its latest agent card; clicking a room shows its status, reasons and
+  equipment. "Focus on my department" / "Show the whole site" moves the camera.
+
 ## Copy
 
 Plain verbs, active voice, specific. Buttons say what happens ("Run confirmation swab first",

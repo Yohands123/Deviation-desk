@@ -3,6 +3,7 @@
  * components can hand them to client components. Agent output shapes come from the contract.
  */
 import type { AgentAnswer, SeatRole } from "@/agents/contract";
+import type { SceneData } from "@/voxel/types";
 
 export type Severity = "info" | "watch" | "warning" | "critical";
 
@@ -132,4 +133,6 @@ export interface IncidentRoomView {
   map: MapRoom[];
   spreadPaths: string[];
   conflicts: ConflictItem[];
+  /** Everything the voxel world draws. */
+  scene: SceneData;
 }

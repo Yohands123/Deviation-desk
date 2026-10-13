@@ -22,12 +22,17 @@ test("a change made in one seat appears in another without reloading", async ({ 
   const { email, plantManagerEmail, password, code } = fixture();
   const qa = await enterRoom(browser, email, password, code, "QA Director");
   const plant = await enterRoom(browser, plantManagerEmail, password, code, "Plant Manager");
+  try {
+    const note = `Filler 3 gasket inspected at ${Date.now()}: visible wear on the needle seal.`;
+    await plant.getByLabel("Add evidence").fill(note);
+    await plant.getByRole("button", { name: "Add evidence" }).click();
+    await expect(plant.getByText("Evidence added.")).toBeVisible();
 
-  const note = `Filler 3 gasket inspected at ${Date.now()}: visible wear on the needle seal.`;
-  await plant.getByLabel("Add evidence").fill(note);
-  await plant.getByRole("button", { name: "Add evidence" }).click();
-  await expect(plant.getByText("Evidence added.")).toBeVisible();
-
-  // The QA Director's page was never reloaded; Realtime must bring the note in.
-  await expect(qa.getByText(note).first()).toBeVisible({ timeout: 10_000 });
+    // The QA Director's page was never reloaded; Realtime must bring the note in.
+    await expect(qa.getByText(note).first()).toBeVisible({ timeout: 10_000 });
+  } finally {
+    // Each page renders the 3D view; close them so later tests are not starved.
+    await qa.context().close();
+    await plant.context().close();
+  }
 });

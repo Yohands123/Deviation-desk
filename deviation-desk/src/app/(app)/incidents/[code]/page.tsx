@@ -10,6 +10,7 @@ import { RealtimeRefresh } from "@/components/incident-room/realtime-refresh";
 import { SeatPicker } from "@/components/incident-room/seat-picker";
 import { PeopleInRoom, YourSeat } from "@/components/incident-room/seats-panel";
 import { SourceDrawerProvider } from "@/components/incident-room/source-drawer";
+import { SiteView } from "@/components/voxel/site-view";
 import { AiMarker, Mono, Panel, SeverityPill, timeLabel } from "@/components/ui";
 import { getIncidentRoom } from "@/incident-room/queries";
 import { requireViewer } from "@/incident-room/viewer";
@@ -83,8 +84,8 @@ export default async function IncidentPage({
 
         {/* Center: the site, spread, findings, evidence */}
         <div className="min-w-0 space-y-4">
-          <Panel title="Site map" action={<span className="text-xs text-muted">Flat map · voxel view arrives in Phase 5</span>}>
-            <FlatMap rooms={room.map} />
+          <Panel title="Site">
+            <SiteView scene={room.scene} cards={room.cards} flat={<FlatMap rooms={room.map} />} />
             {room.objects.length > 0 && (
               <p className="mt-3 text-sm">
                 <span className="text-muted">Opened for: </span>
