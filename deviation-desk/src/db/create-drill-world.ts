@@ -11,6 +11,8 @@ import { WorldRow } from "./rows";
 /** Twin tables copied into a drill, in foreign-key order. */
 export const CLONED_TABLES = [
   "sites",
+  // People before anything that names a person (orders.logged_by).
+  "people",
   "rooms",
   "production_lines",
   "equipment",
@@ -29,7 +31,6 @@ export const CLONED_TABLES = [
   "shipments",
   "shipment_items",
   "sensor_readings",
-  "people",
   "records",
   "contacts",
   "regulatory_rules",

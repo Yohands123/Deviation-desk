@@ -88,4 +88,25 @@ describe("createDrillWorld", () => {
     await expect(createDrillWorld(sql, helix.worldId, 1.5)).rejects.toThrow(/integer/);
     await expect(createDrillWorld(sql, crypto.randomUUID(), 1)).rejects.toThrow(/not found/);
   });
+
+  it("copies an order logged by a person (people are copied before orders)", async () => {
+    const tomas = await resolveRef(sql, helix.worldId, { table: "people", code: "Tomás Reyes" });
+    const [order] = await sql<{ productId: string; destinationId: string }[]>`
+      select product_id, destination_id from orders where world_id = ${helix.worldId} limit 1`;
+    await sql`insert into orders ${sql({
+      worldId: helix.worldId,
+      companyId: helix.companyId,
+      orderCode: "ORD-LOGGED",
+      productId: order?.productId,
+      destinationId: order?.destinationId,
+      quantity: 10,
+      dueAt: new Date(Date.now() + 86_400_000),
+      priority: "routine",
+      loggedBy: tomas,
+      loggedAt: new Date(),
+    })}`;
+    const copy = await createDrillWorld(sql, helix.worldId, 7);
+    const [copied] = await sql<{ loggedBy: string }[]>`select logged_by from orders where world_id = ${copy.id} and order_code = 'ORD-LOGGED'`;
+    expect(copied?.loggedBy).toBe(tomas);
+  });
 });
