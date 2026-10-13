@@ -1,0 +1,33 @@
+{
+  "id": "contamination-001",
+  "seed": 4471,
+  "scenario": {
+    "title": "Sterility failure on Line 3",
+    "description": "Batch A-2231 fails its sterility test. A worn gasket from lot G-77 on Filler 3 is the cause, and Line 4 uses the same gasket lot. The Oct 9 cleaning record is missing as a red herring.",
+    "level": 2,
+    "durationTicks": 24,
+    "trigger": { "type": "sterility_failure", "target": { "table": "batches", "code": "A-2231" }, "atTick": 0 },
+    "spread": { "mode": "spreader", "perTickProbability": 0.15, "edgeTypes": ["material_lot", "shipment"] },
+    "twists": [
+      {
+        "atTick": 6,
+        "by": "hunter",
+        "description": "Batch A-2234 on Line 4 shows a positive EM swab.",
+        "effect": { "type": "em_positive", "target": { "table": "batches", "code": "A-2234" }, "params": {} }
+      }
+    ],
+    "redHerrings": [
+      { "description": "Oct 9 cleaning record for Fill Room 3 is missing.", "target": { "table": "rooms", "code": "Fill Room 3" } }
+    ],
+    "success": { "containWithinTicks": 8, "mustProtect": [{ "table": "shipments", "code": "SH-118" }] }
+  },
+  "hiddenTruth": {
+    "rootCause": "Worn gasket from lot G-77 on Filler 3 allowed contamination during filling.",
+    "causeObject": { "table": "material_lots", "code": "G-77" },
+    "acceptableAnswers": ["worn gasket", "gasket lot G-77", "Filler 3 gasket"]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "agentsThatMustRun": ["evidence_collector", "root_cause_analyst", "devils_advocate"]
+  }
+}

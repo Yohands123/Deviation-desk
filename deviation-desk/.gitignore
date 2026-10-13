@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.*.local
+*.log
+coverage/
+playwright-report/
+test-results/
+__pycache__/
+.venv/
+.DS_Store

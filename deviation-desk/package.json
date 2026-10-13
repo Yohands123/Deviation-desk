@@ -1,0 +1,21 @@
+{
+  "name": "deviation-desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Incident readiness and response platform for life sciences operations.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "inngest": "npx inngest-cli@latest dev",
+    "db:migrate": "echo \"TODO(Phase 1): apply db/migrations\"",
+    "db:seed": "tsx scripts/seed.ts",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "evals": "tsx evals/run.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
