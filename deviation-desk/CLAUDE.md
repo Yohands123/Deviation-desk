@@ -427,14 +427,23 @@ Work through phases in order. At the end of each phase, run typecheck, tests, an
 evals, and update the checkboxes here.
 
 ### Phase 0 — Project setup
-- [ ] Initialize Next.js (App Router, TypeScript, Tailwind, ESLint) in this folder without
+- [x] Initialize Next.js (App Router, TypeScript, Tailwind, ESLint) in this folder without
       overwriting existing files.
-- [ ] Install current versions of: `@anthropic-ai/sdk`, `zod`, `inngest`, `@supabase/supabase-js`,
+- [x] Install current versions of: `@anthropic-ai/sdk`, `zod`, `inngest`, `@supabase/supabase-js`,
       `three`, `@react-three/fiber`, `@react-three/drei`, `langfuse`, `@sentry/nextjs`, and dev deps
       `vitest`, `@playwright/test`, `tsx`. Pin the resolved versions in `package.json`.
-- [ ] Add the npm scripts in §14. Add `.env.local` from `.env.example`.
-- [ ] Make `npm run typecheck` pass with the provided files. (They were written against Zod 4 and
+- [x] Add the npm scripts in §14. Add `.env.local` from `.env.example`.
+- [x] Make `npm run typecheck` pass with the provided files. (They were written against Zod 4 and
       Inngest 4, where triggers go inside the options object: `{ id, triggers: [{ event }] }`.)
+
+Phase 0 notes:
+- Langfuse uses the current OpenTelemetry-based SDK (`@langfuse/tracing`, `@langfuse/otel`,
+  `@opentelemetry/sdk-node`) instead of the legacy `langfuse` v3 package. Wire it up in Phase 2.
+- TypeScript is pinned to 6.0.x because `typescript-eslint` (via `eslint-config-next`) does not
+  yet support TypeScript 7. `.npmrc` sets `save-exact=true` so new installs stay pinned.
+- `npm run lint` runs `eslint .` (Next 16 removed `next lint`).
+- Sentry is installed but not configured (no DSN yet). Playwright browsers are not downloaded
+  until Phase 4 (`npx playwright install chromium`).
 
 ### Phase 1 — The twin
 - [ ] Turn `db/schema.sql` into migration `0001_init.sql`; set up Supabase locally.

@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Live theme tokens from docs/DESIGN.md. The drill theme is added with drill mode (Phase 6). */
+@theme {
+  --color-ground: #f5f4ef;
+  --color-panel: #ffffff;
+  --color-line: #e3e0d7;
+  --color-ink: #1c2128;
+  --color-muted: #5a6270;
+  --color-accent: #2f5d8a;
+  --color-critical: #c2490d;
+  --color-critical-text: #9a3a08;
+  --color-at-risk: #d08a0b;
+  --color-at-risk-fill: #f5e4c0;
+  --color-auditor: #4a4e8a;
+  --color-auditor-bg: #f1f0fa;
+
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
