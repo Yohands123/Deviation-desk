@@ -1,8 +1,9 @@
 /**
- * Seed the Helix Biologics demo company into its live world (docs/DOMAIN.md §Seed).
- * Refuses to seed twice; run `npm run db:reset` to start over.
+ * Seed the Helix Biologics demo company into its live world (docs/DOMAIN.md §Seed), with a local
+ * demo login for each person. Refuses to seed twice; run `npm run db:reset` to start over.
  */
 import { closeSql, getSql } from "../src/db/client";
+import { createDemoLogins, DEMO_PASSWORD } from "../src/db/seed/demo-logins";
 import { HELIX_COMPANY_NAME, seedHelixBiologics } from "../src/db/seed/helix-biologics";
 
 async function main() {
@@ -16,6 +17,9 @@ async function main() {
   }
   const { companyId, worldId } = await seedHelixBiologics(sql);
   console.log(`Seeded ${HELIX_COMPANY_NAME}: company ${companyId}, live world ${worldId}`);
+  const logins = await createDemoLogins(sql, worldId);
+  console.log(`Demo logins (local only, password "${DEMO_PASSWORD}"):`);
+  console.table(logins);
 }
 
 main().then(closeSql, async (err) => {

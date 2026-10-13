@@ -80,6 +80,15 @@ Original designs; **they must not resemble any existing game characters**.
 - **Wanderer:** a drifting, semi-transparent cluster of gold cubes.
 Mode badge: Chase (orange), Scatter (blue), Frightened · reversed (light).
 
+## As built (Phase 4)
+
+- Tokens live in `src/app/globals.css` (Tailwind `@theme`). Added for the live theme: `ai-tint`
+  (AI card background), `critical-fill`, `at-risk-text`, `ok` (approved).
+- Confidence shows a bar and a word; a numeric score is shown only when it agrees with the word.
+- The flat map is an SVG floor plan from `rooms.layout` with the legend Affected / At risk / Clear,
+  each with an icon. On phones the decision card comes first.
+- Identifiers (codes, timestamps, short parameters) use IBM Plex Mono; prose stays in Plex Sans.
+
 ## Copy
 
 Plain verbs, active voice, specific. Buttons say what happens ("Run confirmation swab first",

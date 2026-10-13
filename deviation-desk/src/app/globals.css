@@ -8,19 +8,45 @@
   --color-ink: #1c2128;
   --color-muted: #5a6270;
   --color-accent: #2f5d8a;
+  /* Tinted background for AI content (trust rule 1). */
+  --color-ai-tint: #f1f5f9;
   --color-critical: #c2490d;
   --color-critical-text: #9a3a08;
+  --color-critical-fill: #f8ddcd;
   --color-at-risk: #d08a0b;
+  --color-at-risk-text: #7a5206;
   --color-at-risk-fill: #f5e4c0;
+  --color-ok: #2f6b4f;
   --color-auditor: #4a4e8a;
   --color-auditor-bg: #f1f0fa;
 
-  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: var(--font-plex-sans), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+html {
+  background: var(--color-ground);
 }
 
 body {
   background: var(--color-ground);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Motion only when something changes, and never for people who ask for less (trust rule 5). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

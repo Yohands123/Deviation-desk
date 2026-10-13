@@ -26,7 +26,7 @@ interface Scope {
 export async function addIncidentEvent(
   sql: Sql,
   scope: Scope & { incidentId: string },
-  event: { actorType: "agent" | "system"; actorId: string; eventType: string; payload: Record<string, unknown> },
+  event: { actorType: "agent" | "human" | "system"; actorId: string; eventType: string; payload: Record<string, unknown> },
 ): Promise<void> {
   // Pick the scope fields explicitly: callers often pass a whole event payload as the scope.
   const { worldId, companyId, incidentId } = scope;

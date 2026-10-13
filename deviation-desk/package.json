@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "inngest": "npx inngest-cli@latest dev",
+    "inngest": "npx inngest-cli@1.46.0 dev -u http://localhost:3000/api/inngest",
     "db:migrate": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/migrate.ts",
     "db:seed": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/seed.ts",
     "test": "vitest run --project unit",
@@ -20,7 +20,8 @@
     "db:reset": "supabase db reset && npm run db:migrate && npm run agents:sync && npm run db:seed",
     "test:db": "vitest run --project db",
     "optimizer": "node scripts/optimizer.mjs",
-    "agents:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/sync-agents.ts"
+    "agents:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/sync-agents.ts",
+    "demo:incident": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/demo-incident.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",
@@ -31,8 +32,10 @@
     "@react-three/drei": "10.7.9",
     "@react-three/fiber": "9.8.1",
     "@sentry/nextjs": "11.7.0",
+    "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "inngest": "4.23.0",
+    "lucide-react": "1.55.0",
     "next": "16.4.0",
     "postgres": "3.4.9",
     "react": "19.3.0",

@@ -34,6 +34,7 @@
     "src",
     "evals",
     "scripts",
+    "e2e",
     "next-env.d.ts",
     "next.config.ts",
     "vitest.config.mts",

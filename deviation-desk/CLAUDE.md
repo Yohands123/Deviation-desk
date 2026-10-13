@@ -186,8 +186,10 @@ deviation-desk/
 │   └── migrations/           ← numbered SQL migrations (0001_init.sql is the schema)
 ├── supabase/config.toml      ← local Supabase stack (npm run db:start)
 ├── src/
-│   ├── app/                  ← Next.js routes (create in Phase 4)
-│   ├── components/           ← UI components; voxel/ for R3F scene
+│   ├── app/                  ← Next.js routes: /login, /incidents, /incidents/[code], /report
+│   ├── components/           ← UI components (incident-room/); voxel/ for R3F scene (Phase 5)
+│   ├── incident-room/        ← viewer/session, room queries, view model, server actions
+│   ├── proxy.ts              ← session refresh + sign-in redirect (Next 16 "proxy", was middleware)
 │   ├── agents/
 │   │   ├── contract.ts       ← DecisionRecord + AgentConfig schemas (source of truth)
 │   │   ├── models.ts         ← model tier → model id mapping
@@ -200,6 +202,7 @@ deviation-desk/
 │   ├── sim/                  ← scenario schema, spread engine, saboteurs, clock
 │   ├── db/                   ← Postgres client, migrations, typed queries, trace, cloning, seed
 │   └── lib/                  ← shared utilities (optimizer client)
+├── e2e/                      ← Playwright tests (own fixture company)
 ├── evals/
 │   ├── scenarios/            ← seeded scenario fixtures with hidden truths
 │   └── run.ts                ← eval harness (create in Phase 2)
@@ -402,9 +405,10 @@ npm run db:seed        # seed the Helix Biologics demo company into the live wor
 npm run db:reset       # wipe the local database, migrate, sync agents, and seed
 npm run agents:sync    # write agent definitions (registry.ts) to the database as new versions
 npm run optimizer      # start the optimizer service on :8001 (needed by evals and the Rerouter)
+npm run demo:incident  # put a real agent-run incident (DEV-0001) into the live Helix world (~$0.50)
 npm run test           # unit tests (no database)
 npm run test:db        # database tests (needs db:start; each file seeds its own company)
-npm run test:e2e       # Playwright
+npm run test:e2e       # Playwright (needs db:start; starts the dev server if it is not running)
 npm run evals          # scenario eval suite (calls Claude, ~$0.50 per scenario); add ids to run some
 npm run typecheck      # tsc --noEmit
 npm run lint
@@ -538,9 +542,28 @@ Phase 3 notes:
 - Optimizer requirements are pinned; the Rerouter uses the existing `/allocate` endpoint.
 
 ### Phase 4 — The Incident Room UI
-- [ ] Seat picker, Incident Room (flat map first), live feed, decision card, evidence with sources.
-- [ ] Realtime updates across seats. AI-filled seats.
-- [ ] Human input: report, add evidence, override, raise conflict.
+- [x] Seat picker, Incident Room (flat map first), live feed, decision card, evidence with sources.
+- [x] Realtime updates across seats. AI-filled seats.
+- [x] Human input: report, add evidence, override, raise conflict.
+
+Phase 4 notes:
+- Sign-in is Supabase Auth (email + password). `people.auth_user_id` links a login to a person;
+  `requireViewer()` derives person, company and live world on the server for every page and
+  action. Locally, `npm run db:seed` creates a demo login per Helix person (password
+  `helix-demo`, refused against a non-local Supabase).
+- Migration 0004: read-only RLS policies (company members) on the incident tables plus the
+  Supabase realtime publication. The browser only reads; every write is a server action.
+- Realtime: the room subscribes to its incident's rows and re-renders server components.
+- Human reports run Intake Triage as a preview; nothing opens until the person confirms.
+  Automated paths (sensors, excursions, supplier delays) still open incidents directly.
+- Override records the person's decision and reason and executes nothing.
+- Decisions resume workflows through Inngest; if the engine is down the decision is still saved
+  and the person is told (`src/workflows/emit.ts`). Locally: `npm run inngest`.
+- AI-played seats show their agents and waiting decisions; in live mode they never approve.
+- The Decision Board takes conflicts between seats; only the Executive seat resolves them. The
+  Event Council joins in Phase 7. The Auditor panel is a placeholder until Phase 7.
+- Tests: view-model unit tests; Playwright covers sign-in → seat picker → approve (executed via
+  Inngest when running) and a two-browser realtime update.
 
 ### Phase 5 — Voxel world
 - [ ] R3F isometric scene from twin rooms; instanced voxels; voxel workers by role.
