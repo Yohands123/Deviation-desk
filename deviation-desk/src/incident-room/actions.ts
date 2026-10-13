@@ -20,7 +20,7 @@ import { emit } from "@/workflows/emit";
 import { addIncidentEvent, openIncident } from "@/workflows/incidents";
 import { getSourceRecord, type SourceRecord } from "./queries";
 import { LIVE_SEATS } from "./types";
-import { getViewer, requireViewer, type Viewer } from "./viewer";
+import { getViewer, requireViewer, requireViewerIn, type Viewer } from "./viewer";
 
 export type ActionResult<T = object> = ({ ok: true; warning?: string } & T) | { ok: false; error: string };
 
@@ -37,6 +37,15 @@ async function incidentFor(viewer: Viewer, code: string) {
   if (!incident) throw new Error(`Incident ${code} not found.`);
   return { ...incident, scope: { worldId: viewer.worldId, companyId: viewer.companyId, incidentId: incident.id } };
 }
+
+/** Drills can switch agents off (a humans-only exercise); live worlds always have them. */
+async function agentsRespond(viewer: Viewer): Promise<boolean> {
+  const [run] = await getSql()<{ agentsEnabled: boolean }[]>`select agents_enabled from drill_runs where world_id = ${viewer.worldId}`;
+  return run?.agentsEnabled ?? true;
+}
+
+const World = z.uuid().nullish();
+const DRILL_SEATS = [...LIVE_SEATS, "facilitator"] as const;
 
 async function seatOf(viewer: Viewer, incidentId: string): Promise<SeatRole | null> {
   const [row] = await getSql()<{ role: SeatRole }[]>`
@@ -65,20 +74,23 @@ export async function signOut(): Promise<void> {
 
 // ─── Seats ───────────────────────────────────────────────────────────
 
-export async function takeSeatAction(code: string, role: string): Promise<ActionResult> {
+export async function takeSeatAction(code: string, role: string, world?: string | null): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
-    const seat = z.enum(LIVE_SEATS).parse(role);
+    const viewer = await requireViewerIn(World.parse(world));
+    // The facilitator seat exists only in drills.
+    const seat = (world ? z.enum(DRILL_SEATS) : z.enum(LIVE_SEATS)).parse(role);
     const { id: incidentId, scope } = await incidentFor(viewer, code);
     const sql = getSql();
     const [current] = await sql<{ personId: string | null }[]>`
       select person_id from seats where world_id = ${viewer.worldId} and incident_id = ${incidentId} and role = ${seat}`;
     if (current?.personId && current.personId !== viewer.personId) throw new Error("Someone else holds that seat.");
     if (current?.personId === viewer.personId) return { ok: true }; // already yours
-    // One seat per person per incident: the previous one goes back to AI.
+    // One playing seat per person per incident: the previous one goes back to AI. A drill's
+    // facilitator keeps that role while also playing a seat.
     await sql`
       update seats set person_id = null
-      where world_id = ${viewer.worldId} and incident_id = ${incidentId} and person_id = ${viewer.personId} and role <> ${seat}`;
+      where world_id = ${viewer.worldId} and incident_id = ${incidentId} and person_id = ${viewer.personId}
+        and role <> ${seat} and role <> 'facilitator'`;
     await takeSeat(sql, { ...scope, role: seat, personId: viewer.personId });
     revalidatePath(`/incidents/${code}`);
     return { ok: true };
@@ -94,12 +106,13 @@ const DecideInput = z.object({
   decisionRecordId: z.uuid(),
   outcome: z.enum(["approved", "rejected", "override", "more_evidence"]),
   reason: z.string().max(2000).optional(),
+  world: World,
 });
 
 export async function decide(raw: z.input<typeof DecideInput>): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
     const input = DecideInput.parse(raw);
+    const viewer = await requireViewerIn(input.world);
     const { id: incidentId } = await incidentFor(viewer, input.code);
     const seat = await seatOf(viewer, incidentId);
     if (!seat) throw new Error("Take a seat on this incident before deciding.");
@@ -210,12 +223,13 @@ const EvidenceInput = z.object({
   object: z
     .object({ table: z.enum(["batches", "equipment", "rooms", "material_lots", "shipments", "orders", "records"]), code: z.string().trim().min(1) })
     .optional(),
+  world: World,
 });
 
 export async function addEvidence(raw: z.input<typeof EvidenceInput>): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
     const input = EvidenceInput.parse(raw);
+    const viewer = await requireViewerIn(input.world);
     const { scope } = await incidentFor(viewer, input.code);
     const sql = getSql();
     const objectId = input.object ? await resolveRef(sql, viewer.worldId, input.object) : null;
@@ -240,10 +254,11 @@ export async function addEvidence(raw: z.input<typeof EvidenceInput>): Promise<A
   }
 }
 
-export async function requestRecheck(code: string): Promise<ActionResult> {
+export async function requestRecheck(code: string, world?: string | null): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
+    const viewer = await requireViewerIn(World.parse(world));
     const { scope } = await incidentFor(viewer, code);
+    if (!(await agentsRespond(viewer))) throw new Error("Agents are switched off in this drill; the team works the evidence itself.");
     await addIncidentEvent(getSql(), scope, { actorType: "human", actorId: viewer.personId, eventType: "recheck_requested", payload: {} });
     const started = await emit({ name: "evidence/updated", data: scope });
     revalidatePath(`/incidents/${code}`);
@@ -253,12 +268,12 @@ export async function requestRecheck(code: string): Promise<ActionResult> {
   }
 }
 
-const ConflictInput = z.object({ code: z.string(), withSeat: z.enum(LIVE_SEATS), summary: z.string().trim().min(5).max(1000) });
+const ConflictInput = z.object({ code: z.string(), withSeat: z.enum(DRILL_SEATS), summary: z.string().trim().min(5).max(1000), world: World });
 
 export async function raiseConflict(raw: z.input<typeof ConflictInput>): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
     const input = ConflictInput.parse(raw);
+    const viewer = await requireViewerIn(input.world);
     const { id: incidentId, scope } = await incidentFor(viewer, input.code);
     const seat = await seatOf(viewer, incidentId);
     if (!seat) throw new Error("Take a seat on this incident to raise a conflict.");
@@ -282,13 +297,13 @@ export async function raiseConflict(raw: z.input<typeof ConflictInput>): Promise
   }
 }
 
-const ResolveInput = z.object({ code: z.string(), conflictId: z.string().regex(/^\d+$/), note: z.string().trim().min(3).max(1000) });
+const ResolveInput = z.object({ code: z.string(), conflictId: z.string().regex(/^\d+$/), note: z.string().trim().min(3).max(1000), world: World });
 
 /** The Executive settles a conflict between seats (the Event Council arrives in Phase 7). */
 export async function resolveConflict(raw: z.input<typeof ResolveInput>): Promise<ActionResult> {
   try {
-    const viewer = await requireViewer();
     const input = ResolveInput.parse(raw);
+    const viewer = await requireViewerIn(input.world);
     const { id: incidentId, scope } = await incidentFor(viewer, input.code);
     if ((await seatOf(viewer, incidentId)) !== "executive") throw new Error("Only the Executive seat resolves conflicts.");
     const sql = getSql();
@@ -313,9 +328,9 @@ export async function resolveConflict(raw: z.input<typeof ResolveInput>): Promis
 
 // ─── Sources ─────────────────────────────────────────────────────────
 
-export async function fetchSource(table: string, rowId: string): Promise<ActionResult<{ record: SourceRecord }>> {
+export async function fetchSource(table: string, rowId: string, world?: string | null): Promise<ActionResult<{ record: SourceRecord }>> {
   try {
-    const viewer = await requireViewer();
+    const viewer = await requireViewerIn(World.parse(world));
     const record = await getSourceRecord(viewer, table, rowId);
     if (!record) throw new Error("That record is not available.");
     return { ok: true, record };

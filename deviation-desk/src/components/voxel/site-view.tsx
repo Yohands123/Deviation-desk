@@ -68,7 +68,7 @@ function savePreference(mode: Mode) {
   window.dispatchEvent(new Event(PREFERENCE_EVENT));
 }
 
-export function SiteView({ scene, cards, flat }: { scene: SceneData; cards: Card[]; flat: ReactNode }) {
+export function SiteView({ scene, cards, flat, dark = false }: { scene: SceneData; cards: Card[]; flat: ReactNode; dark?: boolean }) {
   const webgl = useSyncExternalStore(noSubscription, hasWebGL, () => null);
   const reducedMotion = useSyncExternalStore(subscribeMotion, () => window.matchMedia(MOTION_QUERY).matches, () => false);
   const preference = useSyncExternalStore(subscribePreference, readPreference, () => null);
@@ -138,6 +138,7 @@ export function SiteView({ scene, cards, flat }: { scene: SceneData; cards: Card
               focusDepartment={focusDepartment}
               reducedMotion={reducedMotion}
               paused={!onScreen}
+              dark={dark}
               onSelectWorker={(worker) => setSelected({ kind: "worker", worker })}
               onSelectRoom={(id) => setSelected({ kind: "room", id })}
               onTooSlow={() => {

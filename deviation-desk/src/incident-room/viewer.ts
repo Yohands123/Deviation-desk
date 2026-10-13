@@ -38,3 +38,18 @@ export async function requireViewer(): Promise<Viewer> {
   if (!viewer) redirect("/login");
   return viewer;
 }
+
+/**
+ * The viewer inside a world: the live world when none is given, otherwise one of their own
+ * company's drill worlds. A drill copies people with their ids, so the person is the same.
+ */
+export async function requireViewerIn(worldId?: string | null): Promise<Viewer> {
+  const viewer = await requireViewer();
+  if (!worldId || worldId === viewer.worldId) return viewer;
+  const [world] = await getSql()<{ id: string }[]>`
+    select w.id from worlds w
+    join people p on p.world_id = w.id and p.id = ${viewer.personId}
+    where w.id = ${worldId} and w.company_id = ${viewer.companyId} and w.kind = 'drill'`;
+  if (!world) throw new Error("That drill is not available to you.");
+  return { ...viewer, worldId: world.id };
+}

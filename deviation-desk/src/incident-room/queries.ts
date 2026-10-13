@@ -154,7 +154,12 @@ async function buildMap(sql: Sql, worldId: string, objects: ObjectRef[], roomsOf
 
 // ─── The room ────────────────────────────────────────────────────────
 
-export async function getIncidentRoom(viewer: Viewer, code: string): Promise<IncidentRoomView | null> {
+export async function getIncidentRoom(
+  viewer: Viewer,
+  code: string,
+  /** Seats on offer: the live seats, plus the facilitator in a drill. */
+  seatRoles: readonly SeatRole[] = LIVE_SEATS,
+): Promise<IncidentRoomView | null> {
   const sql = getSql();
   const [incident] = await sql<IncidentRow[]>`
     select id, code, title, incident_type, severity, status, opened_at, 0 as pending_decisions
@@ -178,7 +183,7 @@ export async function getIncidentRoom(viewer: Viewer, code: string): Promise<Inc
   const seatRows = await sql<{ role: SeatRole; personId: string | null }[]>`
     select role, person_id from seats where world_id = ${w} and incident_id = ${incident.id}`;
   const ranAgents = new Set(cards.map((c) => c.agentId));
-  const seats: SeatView[] = LIVE_SEATS.map((role) => {
+  const seats: SeatView[] = seatRoles.map((role) => {
     const holderId = seatRows.find((s) => s.role === role)?.personId ?? null;
     return {
       role,
@@ -188,7 +193,9 @@ export async function getIncidentRoom(viewer: Viewer, code: string): Promise<Inc
       pendingDecisions: cards.filter((c) => isOpen(c) && c.decidingSeats.includes(role)).length,
     };
   });
-  const mySeat = seats.find((s) => s.holder?.personId === viewer.personId)?.role ?? null;
+  // A drill facilitator can also play a seat; the playing seat is the one they work from.
+  const held = seats.filter((s) => s.holder?.personId === viewer.personId);
+  const mySeat = (held.find((s) => s.role !== "facilitator") ?? held[0])?.role ?? null;
 
   const evidenceRows = await sql<{ id: string; sourceTable: string; sourceId: string | null; note: string; addedByType: "agent" | "human"; addedBy: string; createdAt: Date }[]>`
     select id, source_table, source_id, note, added_by_type, added_by, created_at

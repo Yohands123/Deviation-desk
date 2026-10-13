@@ -101,6 +101,22 @@ Mode badge: Chase (orange), Scatter (blue), Frightened · reversed (light).
 - Clicking a worker opens its latest agent card; clicking a room shows its status, reasons and
   equipment. "Focus on my department" / "Show the whole site" moves the camera.
 
+## Drill mode as built (Phase 6)
+
+- Every `/drills` page uses the drill theme (`.theme-drill` redefines the tokens) and the DRILL
+  badge replaces the LIVE marker. The 3D site gets a dark backdrop in drills.
+- Facilitator console: drill clock (hour, sim time, status, saboteur mode, seed), Play / Pause /
+  Step one hour / End (with confirmation), difficulty, inject an event, reverse saboteur effects
+  while they are frightened, the saboteurs and their latest moves, and the true spread
+  (facilitator only). Players see saboteur effects as "Field report".
+- Drill room: the Incident Room in the drill world with a drill banner (hour, mode, console link).
+- Saboteurs in the voxel world: each stands in the room of its latest target, or waits beside the
+  building until it acts; they bob, the Wanderer drifts at 60% opacity. Labels carry the mode
+  colour: Chase `#5A2E14`/`#F4B680`, Scatter `#16304A`/`#9CC3EA`, Frightened `#E8ECF1`/`#1C2128`.
+- Debrief: score tiles (overall, root cause, containment, true spread), the hidden truth, the
+  Auditor review with "Ask the Auditor", the full timeline with hidden effects marked and reversals
+  struck through, decision speed per seat, integrity and agent cost.
+
 ## Copy
 
 Plain verbs, active voice, specific. Buttons say what happens ("Run confirmation swab first",

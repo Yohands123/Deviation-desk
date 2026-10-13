@@ -1,6 +1,7 @@
 /**
  * Applies a scenario's trigger to a drill world and returns the first event of the chain.
  * Only the trigger's observable effects are written; the hidden truth never enters the world.
+ * Used by drills (src/sim/drills.ts) and the eval harness.
  */
 import type { Sql } from "@/db/client";
 import { resolveRef } from "@/db/resolve-ref";

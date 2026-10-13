@@ -8,6 +8,7 @@
 import { findOpenIncidents } from "./find-open-incidents";
 import { getApprovedSuppliers } from "./get-approved-suppliers";
 import { getDecision } from "./get-decision";
+import { getDrillFacts, getHiddenTruth, getIncidentTimeline, validateScenarioTool } from "./drill-tools";
 import { getIncident } from "./get-incident";
 import { getInventory } from "./get-inventory";
 import { getRecords } from "./get-records";
@@ -38,6 +39,10 @@ const all = [
   getApprovedSuppliers,
   optimizeRoutes,
   getDecision,
+  validateScenarioTool,
+  getIncidentTimeline,
+  getDrillFacts,
+  getHiddenTruth,
 ] as unknown as AgentTool[];
 
 /** Registry of all tools by name. Agents only receive the ones in their allowedTools. */

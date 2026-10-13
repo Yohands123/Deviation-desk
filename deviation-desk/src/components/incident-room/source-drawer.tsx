@@ -12,15 +12,15 @@ const SourceContext = createContext<Open>(() => {});
 
 type DrawerState = { status: "closed" } | { status: "loading" | "error"; table: string; note?: string; error?: string } | { status: "ready"; record: SourceRecord; note?: string };
 
-export function SourceDrawerProvider({ children }: { children: ReactNode }) {
+export function SourceDrawerProvider({ children, world }: { children: ReactNode; world?: string | null }) {
   const [state, setState] = useState<DrawerState>({ status: "closed" });
 
   const open = useCallback<Open>((table, rowId, note) => {
     setState({ status: "loading", table, note });
-    void fetchSource(table, rowId).then((res) =>
+    void fetchSource(table, rowId, world).then((res) =>
       setState(res.ok ? { status: "ready", record: res.record, note } : { status: "error", table, note, error: res.error }),
     );
-  }, []);
+  }, [world]);
 
   useEffect(() => {
     if (state.status === "closed") return;

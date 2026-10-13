@@ -39,7 +39,10 @@ its row id (`{ table: "batches", code: "A-2231" }`).
 - `agent_runs`, `decision_records`, `approvals`.
 
 **Simulation**
-- `worlds` (`live` | `drill`), `scenarios`, `drill_runs`, `hidden_truths` (restricted).
+- `worlds` (`live` | `drill`), `scenarios` (library or builder; runnable once approved),
+  `drill_runs` (status, tick, difficulty, seed, facilitator, agents on/off, score),
+  `hidden_truths` (restricted), `sim_effects` (append-only drill log: actor, effect, target,
+  hidden flag, reversal link).
 
 ## Impact graph
 
@@ -77,7 +80,11 @@ Status colors follow `docs/DESIGN.md`. Red/orange is reserved for `critical`.
 `board/convened`, `decision/resolved`, `incident/escalated`, `incident/closed`,
 `sim/tick`, `plan/proposed`, `scenario/requested`, `drill/started`, `drill/ended`,
 `incident/dispatched` (the Dispatcher has chosen the agents), `approval/requested` (a proposal
-awaits a seat's decision).
+awaits a seat's decision), `drill/play` (autoplay a drill: one tick every `seconds_per_tick`),
+`drill/audit-requested` (run the Auditor's end-of-drill review).
+
+As built, `drill/ended` is sent when a drill reaches its last hour or the facilitator ends it. A
+drill tick is a function call (`runTick`), not an event; `sim/tick` and `drill/started` are unused.
 
 Payload shapes: `src/workflows/events.ts`. Handlers: `src/workflows/handlers.ts`.
 

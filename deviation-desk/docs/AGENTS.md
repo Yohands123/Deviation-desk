@@ -75,17 +75,27 @@ Columns: **Tier** = model tier · **Wakes on** = triggering event(s) · **Tools*
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `saboteur_hunter` | Escalate the problem at the current focus of team activity | standard | `sim/tick` (chase mode) | `sim_read_activity`, `sim_apply_effect` | sim effect | Facilitator | Touch a live world |
-| `saboteur_ambusher` | Break the next step of the team's current plan | standard | `plan/proposed` (chase) | `sim_read_plans`, `sim_apply_effect` | sim effect | Facilitator | Touch a live world |
-| `saboteur_flanker` | Open a related second front near the Hunter's target | standard | `sim/tick` | `sim_read_activity`, `sim_apply_effect` | sim effect | Facilitator | Touch a live world |
-| `saboteur_wanderer` | Plant false alarms and red herrings | fast | `sim/tick` | `sim_apply_effect` | sim effect | Facilitator | Touch a live world |
-| `scenario_builder` | Turn a plain-language scenario into the `Scenario` schema, mapped to twin objects; ask clarifying questions | deep | `scenario/requested` | `query_twin`, `validate_scenario` | proposal (scenario preview) | Facilitator | Run a scenario without approval |
+| `scenario_builder` | Turn a plain-language scenario into the `Scenario` schema, mapped to twin objects; ask clarifying questions | deep | facilitator request (`/drills/new`) | `query_twin`, `trace_impact`, `validate_scenario` | proposal `run_scenario` (scenario preview) | Facilitator | Run a scenario without approval |
+
+**Saboteurs are not LLM agents.** They are deterministic policies in `src/sim/saboteurs.ts`, run by
+the tick engine from the drill's seed, so a drill replays exactly and costs nothing per tick. Their
+effects go to `sim_effects` and touch only drill worlds (`assertDrillWorld`).
+
+| Saboteur | Policy (chase mode, chance to act = 0.12 × difficulty, max 0.75) |
+|---|---|
+| Hunter | Escalates the object the team cites most in its last 12 decisions (equipment fault, temperature excursion, or an EM spike in its room) |
+| Ambusher | Delays the next planned shipment |
+| Flanker | Hits an object related to the focus through the impact graph |
+| Wanderer | Plants a false alarm in a quiet room; it clears itself after a retest |
 
 ## Oversight
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `auditor` | Live: flag skipped SOP steps and unowned tasks. After: grade seats and team, compare with hidden truth (drill), list top fixes, update agent track records | standard (live) / deep (final) | hourly sweep, `incident/closed`, `drill/ended` | `get_incident_timeline`, `search_sops`, `get_hidden_truth` (end of drill only) | finding (review) | Observer / all | Read hidden truth before drill end |
+| `auditor` | Live: flag skipped SOP steps and unowned tasks. After: grade seats and team, compare with hidden truth (drill), list top fixes, update agent track records | standard (live) / deep (final) | hourly sweep, `incident/closed`, `drill/audit-requested` | `get_incident_timeline`, `search_sops`, `get_drill_facts`, `get_hidden_truth` (both: ended drills only) | finding with `record_drill_review` (team grade, seat grades, root-cause verdict, top fixes) | Observer / all | Read hidden truth before drill end |
+
+Built so far: the end-of-drill review (Phase 6), run when a person asks for it on the debrief.
+The live sweeps and track records come in Phase 7.
 | `coordinator` | Detect conflicts between simultaneous incidents; pause lower priority work; escalate | fast | `incident/opened` when others open | `list_open_incidents`, `get_resources` | proposal | Executive | Resolve conflicts itself |
 
 ---

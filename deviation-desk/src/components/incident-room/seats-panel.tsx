@@ -3,7 +3,7 @@ import type { SeatRole } from "@/agents/contract";
 import { SEAT_LABELS, type SeatView } from "@/incident-room/types";
 import { AiMarker } from "../ui";
 
-export function YourSeat({ code, mySeat, seats }: { code: string; mySeat: SeatRole | null; seats: SeatView[] }) {
+export function YourSeat({ roomPath, mySeat, seats }: { roomPath: string; mySeat: SeatRole | null; seats: SeatView[] }) {
   const seat = seats.find((s) => s.role === mySeat);
   return (
     <div>
@@ -12,7 +12,7 @@ export function YourSeat({ code, mySeat, seats }: { code: string; mySeat: SeatRo
       {seat && seat.agents.length > 0 && (
         <p className="mt-1 text-xs text-muted">Agents working for you: {seat.agents.join(", ")}</p>
       )}
-      <Link href={`/incidents/${code}?seat=choose`} className="mt-2 inline-block text-sm text-accent underline-offset-2 hover:underline">
+      <Link href={`${roomPath}?seat=choose`} className="mt-2 inline-block text-sm text-accent underline-offset-2 hover:underline">
         Change seat
       </Link>
     </div>

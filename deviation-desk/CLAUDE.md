@@ -186,10 +186,12 @@ deviation-desk/
 │   └── migrations/           ← numbered SQL migrations (0001_init.sql is the schema)
 ├── supabase/config.toml      ← local Supabase stack (npm run db:start)
 ├── src/
-│   ├── app/                  ← Next.js routes: /login, /incidents, /incidents/[code], /report
-│   ├── components/           ← UI components: incident-room/, voxel/ (R3F scene, site view)
+│   ├── app/                  ← Next.js routes: /login, /incidents, /incidents/[code], /report,
+│   │                           /drills, /drills/new, /drills/[id] (console, room, debrief)
+│   ├── components/           ← UI components: incident-room/, voxel/ (R3F scene, site view), drills/
 │   ├── voxel/                ← voxel models, scene building, roles (pure, unit-tested)
-│   ├── incident-room/        ← viewer/session, room queries, view model, server actions
+│   ├── incident-room/        ← viewer/session, room queries, view model, server actions (world-aware)
+│   ├── drills/               ← drill console/debrief queries and facilitator server actions
 │   ├── proxy.ts              ← session refresh + sign-in redirect (Next 16 "proxy", was middleware)
 │   ├── agents/
 │   │   ├── contract.ts       ← DecisionRecord + AgentConfig schemas (source of truth)
@@ -200,7 +202,8 @@ deviation-desk/
 │   ├── workflows/            ← event handlers, Inngest functions, approval gate, local runner
 │   ├── approvals/            ← recording decisions, seats, executors, escalation
 │   ├── monitoring/           ← Layer-1 watchers (non-AI rules)
-│   ├── sim/                  ← scenario schema, spread engine, saboteurs, clock
+│   ├── sim/                  ← scenario schema + validation, PRNG, spread, saboteurs, modes, AI
+│   │                           seats, tick engine, effects log, drill lifecycle, scoring, library
 │   ├── db/                   ← Postgres client, migrations, typed queries, trace, cloning, seed
 │   └── lib/                  ← shared utilities (optimizer client)
 ├── e2e/                      ← Playwright tests (own fixture company)
@@ -590,8 +593,45 @@ Phase 5 notes:
   (Executive, Strategy and Observer see the whole site); other rooms dim.
 
 ### Phase 6 — Drill mode
-- [ ] Scenario schema, Scenario Builder, saboteurs with modes, seeded PRNG, facilitator controls.
-- [ ] Auditor end-of-drill scoring against hidden truth; Debrief screen.
+- [x] Scenario schema, Scenario Builder, saboteurs with modes, seeded PRNG, facilitator controls.
+- [x] Auditor end-of-drill scoring against hidden truth; Debrief screen.
+
+Phase 6 notes:
+- Migration 0005: `drill_runs` gains company, incident, tick, difficulty, seconds per tick,
+  agents on/off, facilitator and audit request; `scenarios` gains `source` (library / builder) and
+  `approved_by`; new append-only `sim_effects` log (a `hidden` flag keeps the true spread and
+  facilitator-only notes out of the players' RLS view); `records.record_type` adds `field_report`.
+- A drill clones the live world (`startDrill`), applies the scenario trigger, opens the incident
+  and seats the starter as facilitator. The facilitator keeps that seat while also playing one.
+- Tick engine (`src/sim/tick.ts`): one tick = one simulated hour. Each tick moves the world clock,
+  records team milestones, picks the saboteur mode, runs scripted twists, clears false alarms,
+  spreads contamination over the impact graph (holds and quarantines cut edges), lets saboteurs
+  act, and lets AI-played seats decide. A tick runs only if the drill is still at the expected
+  tick, so a double click or a duplicate event cannot advance it twice.
+- Determinism: one seed per drill, separate PRNG streams per tick for spread, saboteurs and AI
+  seats, so the same seed and the same team decisions replay exactly (tested). Seeds show on the
+  console and debrief.
+- **Saboteurs are deterministic policies, not LLM agents** (`src/sim/saboteurs.ts`): they need to
+  be replayable from the seed, cost nothing per tick, and are easy to tune by difficulty
+  (chance to act = 0.12 × difficulty, capped at 0.75). Modes cycle scatter 2 ticks → chase 5;
+  a team milestone (an approved batch or shipment hold, an accepted root cause) frightens them for 3 ticks, when the
+  facilitator can reverse their effects from the last 6 ticks.
+- AI-played seats decide in drills only, after a seeded 1–3 hour delay, with a 15% chance of
+  asking for more evidence once; a request that lands at a shift change (07:00 or 19:00 site
+  time) waits an extra hour.
+- Agents on/off per drill: off is a people-only tabletop with no model costs.
+- Scenario Builder (`/drills/new`) runs in the live world as a preview; its output is checked by
+  `validateScenario` (references resolve, durations and timelines are physically possible) and only
+  becomes runnable when a facilitator approves it (`scenarios.approved_by`). The four eval
+  scenarios form each company's library (`npm run db:seed` tops it up).
+- Debrief: deterministic score out of 100 (root cause 30, containment 30, protected objects 20,
+  decision speed 10, no fabricated sources 10), the hidden truth, the full timeline with hidden
+  effects revealed, and decision speed per seat. The Auditor's graded review runs only when someone
+  asks (deep tier, about $0.30); its hidden-truth tools refuse until the drill has ended.
+- Drill worlds are kept after the debrief so it can be re-read and replayed; archiving them is
+  left for a cleanup job.
+- Tests: pure sim unit tests, drill database tests (start, replay, tick guard, AI seats, inject /
+  reverse, live refused, scoring) and a Playwright drill run (agents off).
 
 ### Phase 7 — Council, regulatory, comms, expansion, learning
 - [ ] Event Council, Regulator A/B, Comms Agent, Coordinator, Order Desk, Scheduler.

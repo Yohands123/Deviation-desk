@@ -63,6 +63,17 @@ export interface SceneWorker {
   decisionRecordId: string | null;
 }
 
+export type SaboteurName = "hunter" | "ambusher" | "flanker" | "wanderer";
+
+/** Drill only: a saboteur, where it last struck, and its current mode. */
+export interface SceneSaboteur {
+  name: SaboteurName;
+  label: string;
+  mode: "scatter" | "chase" | "frightened";
+  /** Room of its latest target; null until it has acted. */
+  roomId: string | null;
+}
+
 export interface SceneData {
   rooms: SceneRoom[];
   equipment: SceneEquipment[];
@@ -70,4 +81,6 @@ export interface SceneData {
   workers: SceneWorker[];
   /** Rooms of the viewer's seat department; the camera frames them and dims the rest. */
   focusRoomIds: string[];
+  /** Drills only. */
+  saboteurs?: SceneSaboteur[];
 }

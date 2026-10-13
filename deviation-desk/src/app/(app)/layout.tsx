@@ -1,19 +1,20 @@
 import type { ReactNode } from "react";
+import { MainNav, ModeMarker, ThemeScope } from "@/components/app-chrome";
 import { ProductMark } from "@/components/brand";
-import { LiveMarker } from "@/components/ui";
 import { signOut } from "@/incident-room/actions";
 import { requireViewer } from "@/incident-room/viewer";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
   return (
-    <div className="min-h-screen">
+    <ThemeScope>
       <header className="border-b border-line bg-panel">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex items-center gap-3">
             <ProductMark />
             <span className="hidden text-sm text-muted sm:inline">{viewer.companyName}</span>
-            <LiveMarker />
+            <ModeMarker />
+            <MainNav />
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span>
@@ -26,6 +27,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
       {children}
-    </div>
+    </ThemeScope>
   );
 }

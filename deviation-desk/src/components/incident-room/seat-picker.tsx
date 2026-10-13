@@ -18,16 +18,29 @@ const SEAT_JOBS: Partial<Record<SeatRole, string>> = {
 };
 
 /** Pick a seat for this incident. Taking a seat moves you out of any other seat on it. */
-export function SeatPicker({ code, seats, viewerPersonId }: { code: string; seats: SeatView[]; viewerPersonId: string }) {
+export function SeatPicker({
+  code,
+  seats,
+  viewerPersonId,
+  world,
+  roomPath,
+}: {
+  code: string;
+  seats: SeatView[];
+  viewerPersonId: string;
+  world?: string | null;
+  /** Where the room lives: /incidents/CODE live, /drills/ID/room in a drill. */
+  roomPath: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const take = (role: SeatRole) =>
     start(async () => {
-      const res = await takeSeatAction(code, role);
+      const res = await takeSeatAction(code, role, world);
       if (!res.ok) return setError(res.error);
-      router.push(`/incidents/${code}`);
+      router.push(roomPath);
       router.refresh();
     });
 

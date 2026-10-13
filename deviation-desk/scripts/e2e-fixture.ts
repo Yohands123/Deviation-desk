@@ -1,16 +1,20 @@
 /**
  * Fixture for the Playwright test: a separate throwaway company with its own logins, one incident,
- * and one proposal waiting for the QA Director. No model calls. Prints the details as JSON.
+ * one proposal waiting for the QA Director, and the drill scenario library. No model calls. Prints
+ * the details as JSON.
  */
 import { closeSql, getSql } from "../src/db/client";
 import { resolveRef } from "../src/db/resolve-ref";
 import { createDemoLogins, DEMO_PASSWORD } from "../src/db/seed/demo-logins";
 import { seedHelixBiologics } from "../src/db/seed/helix-biologics";
+import { readScenarioFiles, seedScenarioLibrary } from "../src/sim/library";
+import { join } from "node:path";
 
 async function main() {
   const sql = getSql();
   const id = crypto.randomUUID().slice(0, 8);
   const { worldId, companyId } = await seedHelixBiologics(sql, `Helix Biologics (e2e ${id})`);
+  await seedScenarioLibrary(sql, companyId, readScenarioFiles(join(__dirname, "..", "evals", "scenarios")));
   const logins = await createDemoLogins(sql, worldId, `e2e-${id}.example`);
   const qa = logins.find((l) => l.role === "QA Director");
   const plantManager = logins.find((l) => l.role === "Plant Manager");

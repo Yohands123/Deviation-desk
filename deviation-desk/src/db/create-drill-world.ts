@@ -43,6 +43,7 @@ export const NOT_CLONED_TABLES = [
   "agent_runs",
   "decision_records",
   "approvals",
+  "sim_effects", // each drill's own simulation log
 ] as const;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;

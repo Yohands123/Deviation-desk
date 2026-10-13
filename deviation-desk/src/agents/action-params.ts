@@ -59,6 +59,20 @@ export const RerouteSupplyParams = z.object({
   arrivesWithinHours: z.number().optional(),
 });
 
+/** Scenario Builder: run this scenario. The facilitator approves the preview before it can run. */
+export const RunScenarioParams = z.object({
+  scenario: z.unknown(),
+  hiddenTruth: z.unknown(),
+});
+
+/** Auditor: the end-of-drill review. Not an action; the structured part of the finding. */
+export const DrillReviewParams = z.object({
+  teamGrade: z.string(),
+  seatGrades: z.array(z.object({ seat: z.string(), grade: z.string(), note: z.string() })),
+  rootCauseVerdict: z.string(),
+  topFixes: z.array(z.string()).max(5),
+});
+
 /** Supplier Liaison: send this drafted request to an approved supplier. Supply Chain Lead approves. */
 export const ContactSupplierParams = z.object({
   supplier: z.string(),

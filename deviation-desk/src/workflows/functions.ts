@@ -10,6 +10,7 @@ import { escalationPlan } from "@/approvals/escalation";
 import { getSql } from "@/db/client";
 import { runReadingWatchers } from "@/monitoring/run-watchers";
 import { inngest } from "./client";
+import { drillAudit, drillAutoplay } from "./drill-functions";
 import { ApprovalRequested } from "./events";
 import { handlers, type NamedHandler, type StepRunner } from "./handlers";
 import { addIncidentEvent } from "./incidents";
@@ -87,4 +88,6 @@ export const functions = [
   ...Object.entries(handlers).flatMap(([event, list]) => list.map((h) => handlerFunction(event, h))),
   approvalGate,
   readingWatcher,
+  drillAutoplay,
+  drillAudit,
 ];

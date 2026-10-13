@@ -8,7 +8,7 @@ import { SourceLink } from "./source-drawer";
 
 const OBJECT_TABLES = ["batches", "equipment", "rooms", "material_lots", "shipments", "orders"] as const;
 
-export function EvidencePanel({ code, items }: { code: string; items: EvidenceItem[] }) {
+export function EvidencePanel({ code, items, world }: { code: string; items: EvidenceItem[]; world?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState("");
@@ -18,7 +18,7 @@ export function EvidencePanel({ code, items }: { code: string; items: EvidenceIt
 
   const add = () =>
     start(async () => {
-      const res = await addEvidence({ code, note, object: table && objectCode ? { table, code: objectCode } : undefined });
+      const res = await addEvidence({ code, note, object: table && objectCode ? { table, code: objectCode } : undefined, world });
       if (!res.ok) return setMessage({ tone: "error", text: res.error });
       setNote("");
       setObjectCode("");
@@ -28,7 +28,7 @@ export function EvidencePanel({ code, items }: { code: string; items: EvidenceIt
 
   const recheck = () =>
     start(async () => {
-      const res = await requestRecheck(code);
+      const res = await requestRecheck(code, world);
       setMessage(res.ok ? { tone: res.warning ? "warning" : "ok", text: res.warning ?? "The agents are re-checking the evidence." } : { tone: "error", text: res.error });
       router.refresh();
     });

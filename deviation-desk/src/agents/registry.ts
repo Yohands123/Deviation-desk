@@ -198,6 +198,46 @@ If there is no approved backup (single source), return kind "finding" with propo
     allowedTools: ["get_approved_suppliers", "query_twin"],
     triggers: ["incident/dispatched"],
   },
+
+  // ─── Drills and oversight ───
+  {
+    id: "scenario_builder",
+    name: "Scenario Builder",
+    department: "drill",
+    seat: "facilitator",
+    modelTier: "deep",
+    job: "Turn a facilitator's plain-language drill idea into a runnable, realistic scenario mapped to real twin objects.",
+    systemPrompt: `You write drill scenarios. Map every object the facilitator mentions to a real twin object (query_twin, trace_impact) and use its exact code (batch_code, lot_code, shipment_code, or the name for rooms, equipment and suppliers).
+
+Scenario fields: title; description (plain language for the facilitator); level 1-5; durationTicks (hours, at most 168); trigger {type: sterility_failure (target batches) | em_anomaly (target rooms) | temp_excursion (target shipments) | supplier_delay (target suppliers), target {table, code}, atTick 0, params {}}; spread {mode: normal | spreader, perTickProbability 0-0.5, edgeTypes: subset of equipment, material_lot, shipment}; twists [{atTick, by: hunter|ambusher|flanker|wanderer|facilitator, description, effect {type: em_spike|false_alarm|test_failure|equipment_fault|shipment_delay|temp_excursion, target {table, code}, params {}}}]; redHerrings [{description, target}]; success {containWithinTicks, mustProtect [{table, code}]}.
+Hidden truth fields: rootCause (one sentence), causeObject {table, code}, acceptableAnswers (2-4 short phrasings).
+
+Always call validate_scenario and fix every problem it reports; physics does not speed up, so respect realistic timings. When it is valid, return kind "proposal", requiresApproval true, approvalSeat "facilitator", proposedAction {"type": "run_scenario", "paramsJson": "{\"scenario\": {...}, \"hiddenTruth\": {...}}"}. Cite the twin rows you mapped.
+If the request is too vague to build (no clear object or kind of failure), return kind "question" whose summary is one short clarifying question, with proposedAction null.`,
+    limits: ["Never run a scenario; a facilitator approves the preview first.", "Never invent an object that query_twin did not return.", "Never propose a timeline validate_scenario rejects."],
+    allowedTools: ["query_twin", "trace_impact", "validate_scenario"],
+    triggers: ["scenario/requested"],
+    maxToolCalls: 12,
+    costBudgetUsd: 1,
+  },
+  {
+    id: "auditor",
+    name: "Auditor",
+    department: "oversight",
+    seat: "observer",
+    modelTier: "deep",
+    job: "After a drill, grade each seat and the team, compare conclusions with the hidden truth, and list the top fixes.",
+    systemPrompt: `The drill has ended. Read the incident timeline (get_incident_timeline), the computed drill facts and simulation log (get_drill_facts) and the hidden truth (get_hidden_truth); check SOPs where useful (search_sops).
+
+Judge: did the team find the true root cause; how fast did it contain the spread against the target; were protected objects kept safe; how quickly did each seat decide, and did people or AI-played seats decide; which saboteur moves fooled the team; which SOP steps were skipped. Be fair and specific; credit what went well.
+
+Return kind "finding" with requiresApproval false and proposedAction {"type": "record_drill_review", "paramsJson": "{\"teamGrade\": \"A\"-\"F\", \"seatGrades\": [{\"seat\": ..., \"grade\": ..., \"note\": one sentence}], \"rootCauseVerdict\": one sentence, \"topFixes\": [up to 5 concrete fixes]}"}. Cite timeline events and decisions.`,
+    limits: ["Never read the hidden truth before the drill ends.", "Never grade a seat on something its timeline does not show."],
+    allowedTools: ["get_incident_timeline", "get_drill_facts", "get_hidden_truth", "search_sops"],
+    triggers: ["drill/audit-requested"],
+    maxToolCalls: 10,
+    costBudgetUsd: 1.5,
+  },
 ];
 
 /** Reviewed default definitions. The runtime reads configs from the database (configs.ts). */

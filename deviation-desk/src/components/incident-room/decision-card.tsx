@@ -58,7 +58,7 @@ function ParamsList({ params }: { params: Record<string, unknown> }) {
   );
 }
 
-export function DecisionCard({ code, card }: { code: string; card: AgentCard }) {
+export function DecisionCard({ code, card, world }: { code: string; card: AgentCard; world?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [asking, setAsking] = useState<Exclude<Outcome, "approved"> | null>(null);
@@ -68,7 +68,7 @@ export function DecisionCard({ code, card }: { code: string; card: AgentCard }) 
   const submit = (outcome: Outcome) =>
     start(async () => {
       setMessage(null);
-      const res = await decide({ code, decisionRecordId: card.decisionRecordId, outcome, reason: outcome === "approved" ? undefined : reason });
+      const res = await decide({ code, decisionRecordId: card.decisionRecordId, outcome, reason: outcome === "approved" ? undefined : reason, world });
       if (!res.ok) return setMessage({ tone: "error", text: res.error });
       if (res.warning) setMessage({ tone: "warning", text: res.warning });
       setAsking(null);

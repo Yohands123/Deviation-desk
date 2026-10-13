@@ -42,7 +42,8 @@ export async function openIncident(
   sql: Sql,
   scope: Scope,
   params: z.infer<typeof OpenIncidentParams>,
-  triageDecisionId: string,
+  /** The triage decision that proposed it; null when a drill opens its own incident. */
+  triageDecisionId: string | null,
 ): Promise<{ incidentId: string; code: string }> {
   const objects = await Promise.all(
     params.objects.map(async (o) => ({

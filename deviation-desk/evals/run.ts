@@ -22,7 +22,7 @@ import { optimizerIsUp } from "@/lib/optimizer";
 import { HiddenTruth, Scenario } from "@/sim/scenario";
 import { runLocally } from "@/workflows/local-runner";
 import { aggregate, matchesRootCause, missingAgents, missingProposals, namesCauseObject, passed, type Score } from "./score";
-import { applyTrigger } from "./triggers";
+import { applyTrigger } from "@/sim/triggers";
 
 const Expectations = z.object({
   maxFabricatedSources: z.number().int().default(0),

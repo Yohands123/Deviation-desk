@@ -10,7 +10,7 @@ import { raiseConflict, resolveConflict } from "@/incident-room/actions";
 import { LIVE_SEATS, SEAT_LABELS, type ConflictItem } from "@/incident-room/types";
 import { cx, timeLabel } from "../ui";
 
-export function DecisionBoard({ code, conflicts, mySeat }: { code: string; conflicts: ConflictItem[]; mySeat: SeatRole | null }) {
+export function DecisionBoard({ code, conflicts, mySeat, world }: { code: string; conflicts: ConflictItem[]; mySeat: SeatRole | null; world?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [withSeat, setWithSeat] = useState<(typeof LIVE_SEATS)[number]>("executive");
@@ -20,7 +20,7 @@ export function DecisionBoard({ code, conflicts, mySeat }: { code: string; confl
 
   const raise = () =>
     start(async () => {
-      const res = await raiseConflict({ code, withSeat, summary });
+      const res = await raiseConflict({ code, withSeat, summary, world });
       if (!res.ok) return setError(res.error);
       setError(null);
       setSummary("");
@@ -29,7 +29,7 @@ export function DecisionBoard({ code, conflicts, mySeat }: { code: string; confl
 
   const resolve = (conflictId: string) =>
     start(async () => {
-      const res = await resolveConflict({ code, conflictId, note: notes[conflictId] ?? "" });
+      const res = await resolveConflict({ code, conflictId, note: notes[conflictId] ?? "", world });
       if (!res.ok) return setError(res.error);
       setError(null);
       router.refresh();

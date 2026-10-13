@@ -50,3 +50,27 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Drill theme (docs/DESIGN.md §Drill theme): every drill screen redefines the same tokens, so
+   components need no drill-specific styles. */
+.theme-drill {
+  color-scheme: dark;
+  --color-ground: #11151b;
+  --color-panel: #1a2028;
+  --color-line: #2a323d;
+  --color-ink: #e8ecf1;
+  --color-muted: #9aa5b4;
+  --color-accent: #9cc3ea;
+  --color-ai-tint: #1f2833;
+  --color-critical: #f4b680;
+  --color-critical-text: #f4b680;
+  --color-critical-fill: #3a2418;
+  --color-at-risk: #e8c06a;
+  --color-at-risk-text: #f0d48e;
+  --color-at-risk-fill: #352c18;
+  --color-ok: #8fd1a8;
+  --color-auditor: #cfc4ff;
+  --color-auditor-bg: #23233a;
+  background: var(--color-ground);
+  color: var(--color-ink);
+}

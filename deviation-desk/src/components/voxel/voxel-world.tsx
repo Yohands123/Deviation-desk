@@ -12,10 +12,16 @@ import * as THREE from "three";
 import { buildStaticScene, VOXEL_SIZE, workerSpots, type RoomBounds, type StaticScene } from "@/voxel/build-scene";
 import { createRng } from "@/sim/prng";
 import { STATUS } from "@/voxel/palette";
-import { workerModel } from "@/voxel/models";
-import type { SceneData, SceneWorker, Voxel } from "@/voxel/types";
+import { saboteurModel, workerModel } from "@/voxel/models";
+import type { SceneData, SceneSaboteur, SceneWorker, Voxel } from "@/voxel/types";
 
 const S = VOXEL_SIZE;
+/** Mode badge colours (docs/DESIGN.md §Saboteurs): Chase orange, Scatter blue, Frightened light. */
+const SABOTEUR_BADGE = {
+  chase: { background: "#5a2e14", color: "#f4b680" },
+  scatter: { background: "#16304a", color: "#9cc3ea" },
+  frightened: { background: "#e8ecf1", color: "#1c2128" },
+} as const;
 const ISO_DIRECTION = new THREE.Vector3(1, 0.95, 1).normalize();
 const WALK_SECONDS = 4;
 /** Workers read better slightly smaller than the voxel grid of the rooms. */
@@ -28,6 +34,8 @@ export interface VoxelWorldProps {
   reducedMotion: boolean;
   /** Off screen: stop rendering entirely until visible again. */
   paused: boolean;
+  /** Drill theme: a dark backdrop. */
+  dark?: boolean;
   onSelectWorker: (worker: SceneWorker) => void;
   onSelectRoom: (roomId: string) => void;
   /** Called when the device cannot keep a usable frame rate; the page switches to the flat map. */
@@ -114,7 +122,7 @@ function StaticVoxels({
 
 // ─── Workers ─────────────────────────────────────────────────────────
 
-function ModelMesh({ voxels }: { voxels: Voxel[] }) {
+function ModelMesh({ voxels, opacity = 1 }: { voxels: Voxel[]; opacity?: number }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const m = mesh.current;
@@ -132,8 +140,30 @@ function ModelMesh({ voxels }: { voxels: Voxel[] }) {
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, voxels.length]}>
       <boxGeometry args={[S, S, S]} />
-      <meshLambertMaterial />
+      <meshLambertMaterial transparent={opacity < 1} opacity={opacity} />
     </instancedMesh>
+  );
+}
+
+/** A saboteur (drills only): bobs where it last struck; the Wanderer drifts. */
+function Saboteur({ saboteur, position, reducedMotion }: { saboteur: SceneSaboteur; position: THREE.Vector3; reducedMotion: boolean }) {
+  const group = useRef<THREE.Group>(null);
+  const voxels = useMemo(() => saboteurModel(saboteur.name), [saboteur.name]);
+  const phase = { hunter: 0, ambusher: 1.3, flanker: 2.6, wanderer: 3.9 }[saboteur.name];
+  useFrame((state) => {
+    const g = group.current;
+    if (!g || reducedMotion) return;
+    const t = state.clock.elapsedTime + phase;
+    g.position.y = position.y + Math.abs(Math.sin(t * 2)) * 0.08;
+    if (saboteur.name === "wanderer") {
+      g.position.x = position.x + Math.sin(t * 0.6) * 0.5;
+      g.position.z = position.z + Math.cos(t * 0.5) * 0.5;
+    }
+  });
+  return (
+    <group ref={group} position={position} rotation={[0, Math.PI / 4, 0]} raycast={() => null}>
+      <ModelMesh voxels={voxels} opacity={saboteur.name === "wanderer" ? 0.6 : 1} />
+    </group>
   );
 }
 
@@ -317,15 +347,28 @@ function LabelProjector({ anchors, elements }: { anchors: Map<string, THREE.Vect
 
 // ─── The world ───────────────────────────────────────────────────────
 
-export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paused, onSelectWorker, onSelectRoom, onTooSlow }: VoxelWorldProps) {
+export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paused, dark = false, onSelectWorker, onSelectRoom, onTooSlow }: VoxelWorldProps) {
   const built = useMemo(() => buildStaticScene(scene), [scene]);
   const spots = useMemo(() => workerSpots(scene, scene.workers), [scene]);
   const equipmentRoom = useMemo(() => new Map(scene.equipment.map((e) => [e.id, e.roomId])), [scene.equipment]);
   const criticalRooms = useMemo(() => scene.rooms.filter((r) => r.tint === "critical").map((r) => built.rooms[r.id]).filter((b): b is RoomBounds => Boolean(b)), [scene.rooms, built]);
   const area = (focusDepartment ? unionBounds(built.rooms, scene.focusRoomIds) : null) ?? built.bounds;
-  const animated = !reducedMotion && (criticalRooms.length > 0 || scene.workers.length > 0 || scene.equipment.some((e) => e.halted));
+  const animated = !reducedMotion && (criticalRooms.length > 0 || scene.workers.length > 0 || scene.equipment.some((e) => e.halted) || (scene.saboteurs?.length ?? 0) > 0);
 
-  // Label anchors: each room's front-left floor corner, and above each truck.
+  // Saboteurs stand in the room they last struck, spaced apart; before acting they wait beside the building.
+  const saboteurSpots = useMemo(() => {
+    const spots = new Map<string, THREE.Vector3>();
+    (scene.saboteurs ?? []).forEach((s, i) => {
+      const b = s.roomId ? built.rooms[s.roomId] : undefined;
+      const spot = b
+        ? at(b.x1 - 3 - (i % 2) * 4, 1, b.z0 + 3 + Math.floor(i / 2) * 4)
+        : at(built.bounds.x1 + 4, 1, built.bounds.z0 + 2 + i * 6);
+      spots.set(s.name, spot.setY(S));
+    });
+    return spots;
+  }, [scene.saboteurs, built]);
+
+  // Label anchors: each room's front-left floor corner, above each truck, and above each saboteur.
   const anchors = useMemo(() => {
     const m = new Map<string, THREE.Vector3>();
     for (const r of scene.rooms) {
@@ -336,8 +379,9 @@ export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paus
       const top = built.truckTops[t.shipmentCode];
       if (top) m.set(`truck:${t.shipmentCode}`, at(top.x, top.y + 2, top.z));
     }
+    for (const [name, spot] of saboteurSpots) m.set(`saboteur:${name}`, spot.clone().setY(spot.y + 13 * S));
     return m;
-  }, [scene.rooms, scene.trucks, built]);
+  }, [scene.rooms, scene.trucks, built, saboteurSpots]);
   const labelElements = useRef(new Map<string, HTMLElement>());
   const register = (key: string) => (el: HTMLElement | null) => {
     if (el) labelElements.current.set(key, el);
@@ -357,7 +401,7 @@ export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paus
       <PerformanceMonitor onFallback={onTooSlow} flipflops={3} />
       <OrthographicCamera makeDefault near={0.1} far={200} />
       <CameraRig area={area} reducedMotion={reducedMotion} />
-      <color attach="background" args={["#f5f4ef"]} />
+      <color attach="background" args={[dark ? "#11151b" : "#f5f4ef"]} />
       <hemisphereLight args={["#ffffff", "#d8d2c4", 1.6]} />
       <directionalLight position={[6, 12, 9]} intensity={1.4} />
 
@@ -383,6 +427,10 @@ export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paus
           />
         );
       })}
+      {(scene.saboteurs ?? []).map((s) => {
+        const spot = saboteurSpots.get(s.name);
+        return spot ? <Saboteur key={s.name} saboteur={s} position={spot} reducedMotion={reducedMotion} /> : null;
+      })}
       <LabelProjector anchors={anchors} elements={labelElements} />
     </Canvas>
       {/* Labels pair each status colour with a word (trust rule 4). Positioned by LabelProjector. */}
@@ -395,6 +443,13 @@ export default function VoxelWorld({ scene, focusDepartment, reducedMotion, paus
                 · {{ critical: "Affected", at_risk: "At risk", clear: "Clear" }[r.tint]}
               </span>
               {r.taped && <span className="text-at-risk-text"> · Taped off</span>}
+            </div>
+          </div>
+        ))}
+        {(scene.saboteurs ?? []).map((s) => (
+          <div key={s.name} ref={register(`saboteur:${s.name}`)} className="invisible absolute left-0 top-0">
+            <div className="flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] shadow-sm" style={SABOTEUR_BADGE[s.mode]}>
+              <span className="font-medium">{s.label}</span> · {{ chase: "Chase", scatter: "Scatter", frightened: "Frightened" }[s.mode]}
             </div>
           </div>
         ))}

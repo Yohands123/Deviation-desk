@@ -112,6 +112,66 @@ export function workerModel(outfit: Outfit, id: string, carryingFolder = false):
   return merge(...parts);
 }
 
+// ─── Saboteurs (drills only; original designs, docs/DESIGN.md §Saboteurs) ───
+
+const SABOTEUR = {
+  hunterBody: "#d9532b",
+  hunterDark: "#8a2a12",
+  visor: "#f3e9d2",
+  violet: "#7b4fc9",
+  violetDark: "#4b2c86",
+  eye: "#f7f4ee",
+  pupil: "#1c2128",
+  teal: "#2aa198",
+  tealDark: "#16615b",
+  gold: "#e0b84a",
+};
+
+/** Hunter: squat red-orange block, stepped wedge nose, wide pale visor, spiked top. */
+function hunter(): Voxel[] {
+  return merge(
+    box(0, 0, 0, 3, 2, 2, SABOTEUR.hunterBody),
+    box(1, 0, 3, 2, 1, 3, SABOTEUR.hunterBody), // wedge nose, first step
+    box(1, 0, 4, 2, 0, 4, SABOTEUR.hunterBody), // second step
+    box(0, 2, 2, 3, 2, 2, SABOTEUR.visor),
+    ...[0, 2].map((x) => box(x, 3, 1, x, 3, 1, SABOTEUR.hunterDark)),
+    box(1, 3, 0, 1, 3, 0, SABOTEUR.hunterDark),
+    box(3, 3, 0, 3, 3, 0, SABOTEUR.hunterDark),
+  );
+}
+
+/** Ambusher: tall violet body with an eye on a periscope stalk. */
+function ambusher(): Voxel[] {
+  return merge(
+    box(0, 0, 0, 1, 6, 1, SABOTEUR.violet),
+    box(0, 0, 0, 1, 0, 1, SABOTEUR.violetDark),
+    box(1, 7, 1, 1, 9, 1, SABOTEUR.violetDark),
+    box(1, 10, 1, 2, 10, 2, SABOTEUR.eye),
+    box(2, 10, 2, 2, 10, 2, SABOTEUR.pupil),
+  );
+}
+
+/** Flanker: two teal cubes joined by a bar, each with a slit eye. */
+function flanker(): Voxel[] {
+  return merge(
+    box(0, 0, 0, 1, 1, 1, SABOTEUR.teal),
+    box(4, 0, 0, 5, 1, 1, SABOTEUR.teal),
+    box(2, 1, 0, 3, 1, 0, SABOTEUR.tealDark),
+    box(0, 1, 1, 1, 1, 1, SABOTEUR.pupil),
+    box(4, 1, 1, 5, 1, 1, SABOTEUR.pupil),
+  );
+}
+
+/** Wanderer: a loose cluster of gold cubes (drawn semi-transparent). */
+function wanderer(): Voxel[] {
+  const cells: Array<[number, number, number]> = [[0, 1, 0], [1, 2, 1], [2, 1, 0], [1, 0, 2], [0, 3, 1], [2, 3, 2], [3, 2, 1], [1, 4, 0]];
+  return cells.map(([x, y, z]) => ({ x, y, z, color: SABOTEUR.gold }));
+}
+
+export function saboteurModel(name: "hunter" | "ambusher" | "flanker" | "wanderer"): Voxel[] {
+  return { hunter, ambusher, flanker, wanderer }[name]();
+}
+
 /** Quarantine tape around a room's floor edge: alternating yellow and dark voxels, one high. */
 export function tapeRing(w: number, d: number, yellow: string, dark: string): Voxel[] {
   const out: Voxel[] = [];
