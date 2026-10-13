@@ -78,6 +78,17 @@ each service's dashboard.
 - **Drills with "AI agents respond" off** cost nothing.
 - **Messages never leave** without `OUTBOUND_WEBHOOK_URL`. Drill messages never leave at all.
 
+## Gotchas met on the first deploy
+
+- **Quoted values.** `.env` files may quote values (`KEY="…"`), but Vercel stores whatever you give
+  it, quotes included. A quoted Claude key fails with `401 invalid x-api-key`. Paste values
+  without quotes.
+- **Sync Inngest after each deploy.** The Vercel–Inngest integration syncs on Git deploys. After a
+  CLI deploy, run `curl -X PUT https://<your-app>/api/inngest`. It should answer "Successfully
+  registered". Events sent before the sync are not picked up.
+- **Deploy from the repo root.** The Vercel project's Root Directory is `deviation-desk`, so CLI
+  deploys run from the repo root, which holds a `.vercelignore`.
+
 ## Checks after deploying
 
 - `/login` loads and an invited person can sign in.

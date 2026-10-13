@@ -217,7 +217,8 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
         ...(serverFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
       });
     } catch (err) {
-      throw new AgentLoopError(`${agent.id}: model call failed`, spent(), { cause: err });
+      // The cause's message goes in the text too: hosted logs often show only the top error.
+      throw new AgentLoopError(`${agent.id}: model call failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500), spent(), { cause: err });
     }
     model = res.model;
     const turn: TokenUsage = {
