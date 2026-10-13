@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: deviation-desk-optimizer
+    runtime: docker
+    rootDir: deviation-desk/services/optimizer
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    plan: free
+    # Choose and add a region before creating the service; Render otherwise defaults to Oregon.
+    envVars:
+      # Supply a shared secret during setup and use the same value in the app's OPTIMIZER_TOKEN.
+      - key: OPTIMIZER_TOKEN
+        sync: false

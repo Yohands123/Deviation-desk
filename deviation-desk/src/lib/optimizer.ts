@@ -41,7 +41,8 @@ export async function allocate(request: AllocationRequest): Promise<AllocationRe
       method: "POST",
       headers: headers(),
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(15_000),
+      // A hosted free-tier optimizer can take about a minute to wake from idle.
+      signal: AbortSignal.timeout(90_000),
     });
   } catch (err) {
     throw new Error(`Optimizer unreachable at ${baseUrl()}. Start it with npm run optimizer.`, { cause: err });
@@ -99,7 +100,7 @@ export async function schedule(request: ScheduleRequest): Promise<ScheduleRespon
       method: "POST",
       headers: headers(),
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(120_000),
     });
   } catch (err) {
     throw new Error(`Optimizer unreachable at ${baseUrl()}. Start it with npm run optimizer.`, { cause: err });

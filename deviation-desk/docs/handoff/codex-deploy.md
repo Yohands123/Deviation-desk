@@ -96,4 +96,65 @@ Both tasks are verified as described, typecheck and lint are clean, and Findings
 
 ## Findings (Codex writes here)
 
-- (none yet)
+- Completed 2026-10-13. Edits are limited to the listed files and Task 1's explicitly permitted
+  auth-only change to `services/optimizer/main.py`. No commits, pushes, deployments, account
+  creation, real invitations, or hosted-project requests. `.env.production.local` was not loaded.
+
+- **Optimizer container:** `docker build --tag deviation-desk-optimizer:codex-check
+  services/optimizer` passed with Python 3.12 and the existing pinned requirements. Ran
+  `docker run --detach --rm --name deviation-desk-optimizer-codex-check --publish
+  127.0.0.1:18801:8001 deviation-desk-optimizer:codex-check`; `curl.exe --fail --silent --show-error
+  http://127.0.0.1:18801/health` returned `{"ok":true}`. `docker exec ... id -u` returned `10001`.
+  Inline Python/urllib probes also confirmed unauthenticated `/allocate` and `/schedule` return 200
+  when the token is unset. A second temporary container used `--publish 127.0.0.1:18802:18803
+  --env PORT=18803 --env OPTIMIZER_TOKEN`: health remained 200, missing/wrong credentials returned
+  401, and valid credentials returned 200 with feasible allocation/scheduling results. Both test
+  containers were stopped and automatically removed. Docker's engine/build access required sandbox
+  approval. An initial startup probe hit a transient connection close; readiness polling then passed.
+
+- **Auth header:** `Authorization: Bearer <token>` (HTTP header names are case-insensitive).
+  The middleware covers every HTTP path except exactly `/health`, including `/docs` and
+  `/openapi.json`; unauthorized responses include `WWW-Authenticate: Bearer`. Local verification
+  used `services/optimizer/.venv/Scripts/python.exe -B -` with an inline harness that launched
+  temporary Uvicorn processes on loopback: token unset produced 200; token set produced 401 without
+  a correct bearer and 200 with it. An explicitly empty token denies protected requests instead of
+  disabling auth. Test tokens existed only in process environment/memory and were not printed.
+
+- **Render preparation:** repo-root `render.yaml` defines exactly one free Docker web service.
+  Local PyYAML parsing verified its service fields and Docker paths; paths are relative to
+  `rootDir`, per [Render's monorepo documentation](https://render.com/docs/monorepo-support).
+  Choose/add a region before creation; omission defaults to Oregon. Supply a non-empty
+  `OPTIMIZER_TOKEN` during the Blueprint's `sync: false` prompt and give the app the same value.
+  For an existing service or preview, set it manually: `sync: false` prompts only at initial
+  Blueprint creation and is omitted from previews. See
+  [Render's secret-variable documentation](https://render.com/docs/blueprint-spec#prompting-for-secret-values).
+  Free services idle after 15 minutes and take about a minute to wake, which exceeds the current
+  app's 3-second health, 15-second allocation and 30-second scheduling timeouts. Allow for this
+  before relying on the free service. [Render free-service limits](https://render.com/docs/free#spinning-down-on-idle).
+
+- **Invite verification:** an in-memory Node harness (`node --env-file-if-exists=.env.local` via
+  stdin) first confirmed the database was local `127.0.0.1:54322`, then ran
+  `node node_modules/tsx/dist/cli.mjs --conditions=react-server scripts/invite-users.ts --company
+  "Helix Biologics" --map - --dry-run` with a fetch-blocking preload, piped CSV, fake hosted URL
+  `https://example.supabase.co`, fake admin key, and `APP_URL=https://app.example.test`.
+  Exit 0; all 14 already-linked people were reported as skipped; **0 fetch calls** and identical
+  `people.auth_user_id` snapshots before/after. The local-URL refusal check used
+  `http://127.0.0.1:54321` and an intentionally unreachable local database on port 1: exit 1 with
+  "Local Supabase URLs are refused; the local stack keeps demo logins.", **0 fetch calls**, before
+  any DB connection. `--map -` accepts stdin, so no verification CSV/helper file was created.
+
+- **Invite behavior/deployer notes:** `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
+  `SUPABASE_SECRET_KEY` and `APP_URL` are required. Use the database and admin key from the same
+  intended Supabase project. Add `${APP_URL}/login` to its Auth redirect allowlist before sending
+  invitations; see [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
+  The entire CSV is validated and all names resolved before the first invitation; linked people
+  are skipped, and pending people are locked/rechecked before inviting and linking. The script
+  stops at the first error and exits 1. If an invite succeeds but its DB link fails, review Auth
+  before retrying because an email cannot be rolled back. Actual invitation calls were mocked in
+  unit tests, never run against a project.
+
+- **Final checks:** `npm.cmd run test -- scripts/invite-users.test.ts` passed **47 tests**,
+  covering CSV parsing, CLI validation, local URL refusal, unlinked dry runs with no Auth client or
+  writes, idempotency, world-scoped links and error handling. `npm.cmd run typecheck` and
+  `npm.cmd run lint` both passed. `git diff --check` passed. The `.cmd` launchers are equivalent
+  to the requested npm commands and avoid the Windows PowerShell execution-policy block.

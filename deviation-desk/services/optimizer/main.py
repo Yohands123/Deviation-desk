@@ -2,11 +2,30 @@
 Optimizer service (CLAUDE.md §2 principle 10). The language model frames problems;
 this service solves them. Start: uvicorn main:app --reload --port 8001
 """
-from fastapi import FastAPI
+import os
+from secrets import compare_digest
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from ortools.linear_solver import pywraplp
 
 app = FastAPI(title="Deviation Desk Optimizer")
+
+
+@app.middleware("http")
+async def require_optimizer_token(request: Request, call_next):
+    token = os.getenv("OPTIMIZER_TOKEN")
+    # Health checks stay public; a missing token preserves local development behavior.
+    if token is not None and request.url.path != "/health":
+        authorization = request.headers.get("authorization", "")
+        if not token or not compare_digest(authorization.encode("utf-8"), f"Bearer {token}".encode("utf-8")):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Unauthorized"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    return await call_next(request)
 
 
 class Source(BaseModel):
