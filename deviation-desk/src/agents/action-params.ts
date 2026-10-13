@@ -38,3 +38,30 @@ export const AcceptRootCauseParams = z.object({
   cause: z.string(),
   causeObject: ObjectRef.optional(),
 });
+
+/** Quarantine Officer: hold these batches and all their stock. QA Director or Plant Manager approves. */
+export const HoldBatchParams = z.object({
+  batches: z.array(z.string()).min(1),
+  reason: z.string(),
+});
+
+/** Quarantine Officer: hold these shipments. Supply Chain Lead approves. */
+export const HoldShipmentParams = z.object({
+  shipments: z.array(z.string()).min(1),
+  reason: z.string(),
+});
+
+/** Rerouter: supply an order from these locations, as the optimizer planned. Supply Chain Lead approves. */
+export const RerouteSupplyParams = z.object({
+  orderCode: z.string(),
+  allocations: z.array(z.object({ location: z.string(), quantity: z.number().int().positive() })).min(1),
+  totalCost: z.number().optional(),
+  arrivesWithinHours: z.number().optional(),
+});
+
+/** Supplier Liaison: send this drafted request to an approved supplier. Supply Chain Lead approves. */
+export const ContactSupplierParams = z.object({
+  supplier: z.string(),
+  material: z.string(),
+  message: z.string().min(1).max(4000),
+});

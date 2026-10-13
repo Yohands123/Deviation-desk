@@ -30,6 +30,8 @@ its row id (`{ table: "batches", code: "A-2231" }`).
 - `orders` — customer or trial-site demand: quantity, due date, priority.
 - `shipments` and `shipment_items` — what is moving where, with carrier and storage condition.
 - `sensor_readings` — EM swabs, equipment readings, room and shipment temperatures.
+- `lanes` — transit hours and cost per unit between two locations for a storage condition. The
+  Rerouter's optimizer call uses them to decide which stock can reach an order in time.
 
 **People and work**
 - `people` — name, role, site, shift.
@@ -73,7 +75,11 @@ Status colors follow `docs/DESIGN.md`. Red/orange is reserved for `critical`.
 `root_cause/accepted`, `impact/updated`, `hold/approved`, `shortfall/detected`,
 `shipment/temp_excursion`, `supplier/delay`, `order/received`, `order/urgent`,
 `board/convened`, `decision/resolved`, `incident/escalated`, `incident/closed`,
-`sim/tick`, `plan/proposed`, `scenario/requested`, `drill/started`, `drill/ended`.
+`sim/tick`, `plan/proposed`, `scenario/requested`, `drill/started`, `drill/ended`,
+`incident/dispatched` (the Dispatcher has chosen the agents), `approval/requested` (a proposal
+awaits a seat's decision).
+
+Payload shapes: `src/workflows/events.ts`. Handlers: `src/workflows/handlers.ts`.
 
 ---
 
@@ -155,5 +161,8 @@ PRNG, so every seed is identical.
   due 14 Oct 08:00 (47 hours after the anchor). Clean released stock (G-69) sits at Montreal DC.
 - **People:** 14, including Priya Raman (Plant Manager), Marcus Bell (Clinical Ops Manager),
   Elena Duarte (QA Director), Tomás Reyes (Supply Chain Lead), Hannah Okafor (Regulatory Affairs).
+- **Lanes (refrigerated):** Dock → Montreal DC 6 h; Warehouse Bay A → Montreal DC 7 h, → trial
+  sites 28–30 h; Montreal DC → trial site 104 20 h, → trial site 212 22 h, → Northshore 8 h,
+  → Lakeview 12 h.
 - **Sensors:** daily EM swabs for Fill Room 3 and Line 4 (30 days each; Fill Room 3 reads 0, 1, 2, 3
   CFU on 9–12 Oct), plus SH-117 truck temperatures inside 2–8 °C.

@@ -66,9 +66,61 @@ async function emAnomaly(sql: Sql, scope: DrillScope, trigger: Trigger): Promise
   };
 }
 
+/** Writes a warm stretch into a shipment's telemetry and returns the watcher's excursion event. */
+async function tempExcursion(sql: Sql, scope: DrillScope, trigger: Trigger): Promise<Emitted> {
+  if (trigger.target.table !== "shipments") throw new Error("temp_excursion targets a shipment");
+  const shipmentId = await resolveRef(sql, scope.worldId, trigger.target);
+  const peakC = Number(trigger.params.peakC ?? 11);
+  const hours = Number(trigger.params.hours ?? 5);
+  // Hourly readings: climb past 8 °C, hold near the peak, end still warm (ongoing at sim time).
+  const readings = Array.from({ length: hours + 1 }, (_, i) => ({
+    worldId: scope.worldId,
+    companyId: scope.companyId,
+    subjectTable: "shipments",
+    subjectId: shipmentId,
+    metric: "temp_c",
+    value: Math.round((8.6 + (peakC - 8.6) * Math.min(1, i / 2)) * 10) / 10,
+    recordedAt: new Date(scope.simClock.getTime() - (hours - i) * 3_600_000),
+  }));
+  // The scenario defines what the logger recorded in this window, so replace any seeded readings
+  // there; overlapping in-range and out-of-range readings would be contradictory telemetry.
+  const first = readings[0];
+  const last = readings.at(-1);
+  if (!first || !last) throw new Error("temp_excursion needs at least one reading");
+  await sql`
+    delete from sensor_readings
+    where world_id = ${scope.worldId} and subject_id = ${shipmentId} and metric = 'temp_c'
+      and recorded_at between ${first.recordedAt} and ${last.recordedAt}`;
+  await sql`insert into sensor_readings ${sql(readings)}`;
+  return {
+    name: "shipment/temp_excursion",
+    data: { worldId: scope.worldId, companyId: scope.companyId, subjectTable: "shipments", subjectId: shipmentId, metric: "temp_c", value: last?.value, recordedAt: last?.recordedAt.toISOString() },
+  };
+}
+
+/** A supplier's delay notice, as the Supply Chain Lead would forward it. */
+async function supplierDelay(sql: Sql, scope: DrillScope, trigger: Trigger): Promise<Emitted> {
+  if (trigger.target.table !== "suppliers") throw new Error("supplier_delay targets a supplier");
+  await resolveRef(sql, scope.worldId, trigger.target); // must exist
+  return {
+    name: "supplier/delay",
+    data: {
+      worldId: scope.worldId,
+      companyId: scope.companyId,
+      reportedBy: "Tomás Reyes (Supply Chain Lead)",
+      supplier: trigger.target.code,
+      material: typeof trigger.params.material === "string" ? trigger.params.material : undefined,
+      delayDays: Number(trigger.params.delayDays ?? 21),
+      note: typeof trigger.params.note === "string" ? trigger.params.note : undefined,
+    },
+  };
+}
+
 const TRIGGERS: Record<string, (sql: Sql, scope: DrillScope, trigger: Trigger) => Promise<Emitted>> = {
   sterility_failure: sterilityFailure,
   em_anomaly: emAnomaly,
+  temp_excursion: tempExcursion,
+  supplier_delay: supplierDelay,
 };
 
 export function applyTrigger(sql: Sql, scope: DrillScope, trigger: Trigger): Promise<Emitted> {

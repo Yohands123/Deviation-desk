@@ -18,7 +18,12 @@ export const Scenario = z.object({
   description: z.string(), // plain language, shown to the facilitator
   level: z.number().int().min(1).max(5),
   durationTicks: z.number().int().positive(),
-  trigger: z.object({ type: z.string(), target: ObjectRef, atTick: z.number().int().nonnegative().default(0) }),
+  trigger: z.object({
+    type: z.string(),
+    target: ObjectRef,
+    atTick: z.number().int().nonnegative().default(0),
+    params: z.record(z.string(), z.unknown()).default({}),
+  }),
   spread: z.object({
     mode: z.enum(["normal", "spreader"]),
     perTickProbability: z.number().min(0).max(1).default(0),

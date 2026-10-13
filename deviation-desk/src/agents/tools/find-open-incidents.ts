@@ -19,6 +19,8 @@ export const findOpenIncidents: AgentTool<typeof input> = {
       from incidents i
       where i.world_id = ${ctx.worldId} and i.status <> 'closed'
       order by i.opened_at desc limit ${limit}`;
+    // With nothing open, say so plainly: a citeAs hint over an empty list invites citing the table itself.
+    if (incidents.length === 0) return { incidents: [], note: "No open incidents. Nothing here to cite." };
     return { citeAs: "incidents", incidents };
   },
 };

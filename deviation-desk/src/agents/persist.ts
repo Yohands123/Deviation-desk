@@ -13,6 +13,7 @@ export interface RunRow {
   companyId: string;
   incidentId: string | null;
   agentId: string;
+  agentConfigVersion: number | null;
   model: string;
   usage: TokenUsage;
   costUsd: number;
@@ -35,6 +36,7 @@ function runValues(run: RunRow) {
     companyId: run.companyId,
     incidentId: run.incidentId,
     agentId: run.agentId,
+    agentConfigVersion: run.agentConfigVersion,
     model: run.model,
     // Billed input = uncached + cache writes + cache reads.
     inputTokens: run.usage.inputTokens + run.usage.cacheWriteTokens + run.usage.cacheReadTokens,

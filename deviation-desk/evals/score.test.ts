@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, matchesRootCause, missingAgents, namesCauseObject, passed, type Score } from "./score";
+import { aggregate, matchesRootCause, missingAgents, missingProposals, namesCauseObject, passed, type Score } from "./score";
 
 const base: Score = {
   id: "s",
   rootCauseCorrect: true,
   citesCauseObject: true,
   agentsMissing: [],
+  proposalsMissing: [],
+  forbiddenProposals: [],
   fabricatedSources: 0,
   costUsd: 0,
   durationMs: 0,
@@ -55,10 +57,34 @@ describe("scoring", () => {
     expect(passed({ ...base, agentsMissing: ["devils_advocate"] })).toBe(false);
     expect(passed({ ...base, rootCauseCorrect: false })).toBe(false);
     expect(passed({ ...base, error: "boom" })).toBe(false);
+    expect(passed({ ...base, proposalsMissing: ["hold_shipment: SH-118"] })).toBe(false);
+    expect(passed({ ...base, forbiddenProposals: ["recall"] })).toBe(false);
+  });
+
+  it("does not fail a scenario that does not score a root cause", () => {
+    expect(passed({ ...base, rootCauseCorrect: null, citesCauseObject: null })).toBe(true);
   });
 
   it("aggregates as the share of passing scenarios", () => {
     expect(aggregate([base, { ...base, rootCauseCorrect: false }])).toBe(0.5);
     expect(aggregate([])).toBe(0);
+  });
+});
+
+describe("missingProposals", () => {
+  const made = [
+    { actionType: "hold_batch", params: { batches: ["A-2230", "A-2231"], reason: "G-77" } },
+    { actionType: "hold_shipment", params: { shipments: ["SH-119"], reason: "r" } },
+  ];
+
+  it("is satisfied by a proposal of that type mentioning every code, in any case", () => {
+    expect(missingProposals([{ actionType: "hold_batch", mentions: ["a-2231"] }], made)).toEqual([]);
+  });
+
+  it("lists expectations no proposal meets", () => {
+    expect(missingProposals([{ actionType: "hold_shipment", mentions: ["SH-118"] }, { actionType: "recall", mentions: [] }], made)).toEqual([
+      "hold_shipment: SH-118",
+      "recall: ",
+    ]);
   });
 });

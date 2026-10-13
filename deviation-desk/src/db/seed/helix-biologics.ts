@@ -239,6 +239,30 @@ export async function seedHelixBiologics(sql: Sql, companyName = HELIX_COMPANY_N
       "name",
     );
 
+    // Refrigerated lanes: transit hours and cost per unit. The site ships to customers and trial
+    // sites through Montreal DC; the DC can also ship straight from the site in a pinch.
+    await tx`insert into lanes ${tx(
+      (
+        [
+          ["Dock", "Montreal DC", 6, 0.4],
+          ["Warehouse Bay A", "Montreal DC", 7, 0.45],
+          ["Warehouse Bay A", "Trial site 212 (study HLX-201-04)", 30, 3.1],
+          ["Warehouse Bay A", "Trial site 104 (study HLX-201-03)", 28, 2.9],
+          ["Montreal DC", "Trial site 104 (study HLX-201-03)", 20, 1.8],
+          ["Montreal DC", "Trial site 212 (study HLX-201-04)", 22, 2.1],
+          ["Montreal DC", "Northshore Hospital Pharmacy", 8, 0.9],
+          ["Montreal DC", "Lakeview Specialty Pharmacy", 12, 1.1],
+        ] as const
+      ).map(([origin, destination, transitHours, costPerUnit]) => ({
+        ...base,
+        originId: idOf(locations, origin),
+        destinationId: idOf(locations, destination),
+        storageCondition: "refrigerated",
+        transitHours,
+        costPerUnit,
+      })),
+    )}`;
+
     const inventorySpec = [
       ["A-2227", "Montreal DC", 1800],
       ["A-2228", "Montreal DC", 2100],

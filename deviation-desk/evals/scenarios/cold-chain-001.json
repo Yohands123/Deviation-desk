@@ -1,0 +1,73 @@
+{
+  "id": "cold-chain-001",
+  "seed": 7301,
+  "scenario": {
+    "title": "Reefer failure on SH-117",
+    "description": "The refrigeration unit on the truck carrying SH-117 (A-2229 for trial site 104) fails. The load sits above 8 °C for about five hours and is still warm. The shipment must be held and the trial order resupplied.",
+    "level": 1,
+    "durationTicks": 12,
+    "trigger": {
+      "type": "temp_excursion",
+      "target": {
+        "table": "shipments",
+        "code": "SH-117"
+      },
+      "atTick": 0,
+      "params": {
+        "peakC": 11.5,
+        "hours": 5
+      }
+    },
+    "spread": {
+      "mode": "normal",
+      "perTickProbability": 0,
+      "edgeTypes": []
+    },
+    "twists": [],
+    "redHerrings": [],
+    "success": {
+      "containWithinTicks": 4,
+      "mustProtect": [
+        {
+          "table": "orders",
+          "code": "ORD-1043"
+        }
+      ]
+    }
+  },
+  "hiddenTruth": {
+    "rootCause": "The reefer unit on the SH-117 truck failed, holding the product above 8 °C for about five hours.",
+    "causeObject": {
+      "table": "shipments",
+      "code": "SH-117"
+    },
+    "acceptableAnswers": [
+      "reefer failure",
+      "refrigeration failure"
+    ]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "scoreRootCause": false,
+    "agentsThatMustRun": [
+      "cold_chain_monitor",
+      "intake_triage",
+      "dispatcher",
+      "quarantine_officer"
+    ],
+    "proposals": [
+      {
+        "actionType": "hold_shipment",
+        "mentions": [
+          "SH-117"
+        ]
+      },
+      {
+        "actionType": "reroute_supply",
+        "mentions": [
+          "ORD-1043"
+        ]
+      }
+    ]
+  }
+}

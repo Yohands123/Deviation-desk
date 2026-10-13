@@ -17,8 +17,10 @@
     "lint": "eslint .",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset && npm run db:migrate && npm run db:seed",
-    "test:db": "vitest run --project db"
+    "db:reset": "supabase db reset && npm run db:migrate && npm run agents:sync && npm run db:seed",
+    "test:db": "vitest run --project db",
+    "optimizer": "node scripts/optimizer.mjs",
+    "agents:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/sync-agents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",

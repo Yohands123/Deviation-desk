@@ -14,14 +14,14 @@ Columns: **Tier** = model tier · **Wakes on** = triggering event(s) · **Tools*
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
 | `signal_watcher` | Judge whether a watcher anomaly is a real trend or noise, using history | standard | `sensor/anomaly`, daily sweep | `query_twin`, `get_sensor_history` | finding | Plant Manager | Declare a failure; only warns |
-| `intake_triage` | Classify a new problem: type, severity, site, linked objects | fast | `report/submitted`, `signal/confirmed` | `query_twin`, `find_open_incidents` | proposal (open incident) | QA Director | Open a duplicate without suggesting the existing incident |
+| `intake_triage` | Classify a new problem: type, severity, site, linked objects | fast | `report/submitted`, `signal/confirmed`, `supplier/delay` | `query_twin`, `find_open_incidents`, `get_decision` | proposal (open incident) | QA Director | Open a duplicate without suggesting the existing incident |
 | `dispatcher` | Decide which agents and seats join an incident | fast | `incident/opened`, `incident/reclassified` | `get_incident`, `list_agents` | proposal (activation list) | QA Director | Wake agents irrelevant to the incident type |
 
 ## Investigation and diagnosis
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `evidence_collector` | Gather logs, cleaning and maintenance records, batch history, EM readings, shifts, test results; flag gaps | standard | `incident/opened` (quality, equipment) | `query_twin`, `get_records`, `get_sensor_history`, `search_sops` | finding (evidence list) | QA Director | Draw conclusions |
+| `evidence_collector` | Gather logs, cleaning and maintenance records, batch history, EM readings, shifts, test results; flag gaps | standard | `incident/dispatched` (if activated) | `query_twin`, `get_records`, `get_sensor_history`, `search_sops` | finding (evidence list) | QA Director | Draw conclusions |
 | `root_cause_analyst` | Propose ranked causes with evidence and confidence | deep | `evidence/updated` | `list_evidence`, `get_records`, `query_twin`, `trace_impact` | proposal (root cause) | QA Director | Accept its own conclusion |
 | `devils_advocate` | Argue against the leading theory; find disconfirming evidence | deep | `root_cause/proposed` | `list_evidence`, `get_records`, `query_twin` | finding (challenge) | QA Director | Propose actions |
 | `trial_runner` | Design a quick confirm/rule-out test with expected results and duration | standard | `root_cause/proposed`, `challenge/raised` | `query_twin`, `get_lab_capacity` | proposal (test) | QA Director | Schedule the test without approval |
@@ -30,17 +30,17 @@ Columns: **Tier** = model tier · **Wakes on** = triggering event(s) · **Tools*
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `spread_tracker` | Map every connected batch, lot, shipment, customer, trial site | standard | `incident/opened`, each tick while open | `trace_impact`, `query_twin` | finding (impact map) | Supply Chain Lead | Change any object status |
-| `quarantine_officer` | Propose holds and quarantines that cut spread edges | standard | `impact/updated` | `trace_impact`, `query_twin` | proposal (hold/quarantine) | Plant Manager | Halt a line or hold stock without approval |
+| `spread_tracker` | Map every connected batch, lot, shipment, customer, trial site | standard | `incident/dispatched` (if activated); each tick while open from Phase 6 | `trace_impact`, `query_twin`, `get_incident` | finding (impact map) | Supply Chain Lead | Change any object status |
+| `quarantine_officer` | Propose holds that cut spread edges; runs twice: product holds, then shipment holds | standard | `impact/updated` | `trace_impact`, `query_twin`, `get_incident` | proposal (`hold_batch` / `hold_shipment`) | Plant Manager | Halt a line or hold stock without approval |
 
 ## Logistics and orders
 
 | Agent | Job | Tier | Wakes on | Tools | Output | Works for | Never |
 |---|---|---|---|---|---|---|---|
-| `inventory_agent` | Compute released stock, at-risk stock, and shortfall dates | standard | `hold/approved`, `order/created` | `query_twin`, `get_inventory` | finding | Supply Chain Lead | Reallocate stock |
-| `rerouter` | Find alternate supply routes; call optimizer; present options with cost and timing | standard | `shortfall/detected` | `get_inventory`, `optimize_routes` | proposal (route options) | Supply Chain Lead | Pick an option itself |
-| `cold_chain_monitor` | Assess temperature excursions and product usability window | standard | `shipment/temp_excursion` | `get_shipment_telemetry`, `query_twin` | finding | Supply Chain Lead | Declare product released or destroyed |
-| `supplier_liaison` | Handle supplier delays; find approved backups; draft requests | standard | `supplier/delay` | `query_twin`, `get_approved_suppliers` | proposal + draft | Supply Chain Lead | Send messages |
+| `inventory_agent` | Explain released stock, at-risk stock, and orders without supply (computed by `get_inventory`) | standard | `hold/approved` | `get_inventory`, `query_twin` | finding | Supply Chain Lead | Reallocate stock |
+| `rerouter` | Find alternate supply routes; call optimizer; present options with cost and timing | standard | `shortfall/detected` | `optimize_routes`, `get_inventory`, `query_twin` | proposal (`reroute_supply`) | Supply Chain Lead | Pick an option itself |
+| `cold_chain_monitor` | Assess temperature excursions and product usability window | standard | `shipment/temp_excursion` | `get_shipment_telemetry`, `query_twin` | finding (+ `confirm_signal` when product may be affected) | Supply Chain Lead | Declare product released or destroyed |
+| `supplier_liaison` | Handle supplier delays; find approved backups; draft requests | standard | `incident/dispatched` (supply incidents, if activated) | `get_approved_suppliers`, `query_twin` | proposal (`contact_supplier` with draft) | Supply Chain Lead | Send messages |
 | `order_desk` | Log and check incoming orders against open incidents | fast | `order/received` | `query_twin`, `find_open_incidents` | finding | Supply Chain Lead | Promise a delivery date |
 | `scheduler` | Plan production, testing, release, and shipping within capacity; call optimizer | standard | `order/urgent`, `capacity/changed` | `get_capacity`, `optimize_schedule` | proposal (schedule options) | Plant Manager | Bump another customer without showing the trade-off |
 
@@ -112,6 +112,22 @@ AI seats may only auto-approve in **Drill** mode.
 Enforced in `src/agents/approvals.ts`: an answer proposing one of these actions without
 `requiresApproval` and an allowed `approvalSeat` fails validation.
 
+**How a decision is recorded** (`src/approvals/record-approval.ts`, called through
+`resolveDecision()` in `src/workflows/decisions.ts`): every approval belongs to an incident; the
+seat must be allowed for the action type; in a live world the decider must be a person who holds
+that seat on the incident (`seats`); each proposal gets one final decision (approved, rejected,
+override); rejecting, overriding or asking for more evidence needs a reason.
+
+**Escalation** (`src/approvals/escalation.ts`) notifies; it never moves authority. If the owning
+seat has not decided within the severity's response time (critical 30 min, warning 2 h, watch 8 h,
+info 24 h), the Executive is notified; after another interval the decision is marked overdue.
+
+**Execution** (`src/approvals/executors.ts`) happens only after an approved row exists, once per
+decision, inside the decision's world: `hold_batch` quarantines batches and holds their stock;
+`hold_shipment` holds planned, at-dock or in-transit shipments (never delivered ones);
+`accept_root_cause` records acceptance; `reroute_supply` creates planned shipments from the oldest
+clean stock; `contact_supplier` is recorded but not sent until outbound messaging exists (Phase 7).
+
 These action types are **not** consequential and need no approval; the workflow acts on them and
 logs the decision record that proposed them (parameter shapes: `src/agents/action-params.ts`):
 
@@ -120,7 +136,7 @@ logs the decision record that proposed them (parameter shapes: `src/agents/actio
 | `confirm_signal` | Signal Watcher | Emits `signal/confirmed` for Intake Triage |
 | `open_incident` | Intake Triage | Opens the incident (code `DEV-0001`, …) and emits `incident/opened` |
 | `link_to_incident` | Intake Triage | Adds a `linked_report` event to the existing incident |
-| `activate_agents` | Dispatcher | Records `agents_activated`; only listed agents run for the incident |
+| `activate_agents` | Dispatcher | Records `agents_activated`, emits `incident/dispatched`; only listed agents run for the incident |
 
 ---
 

@@ -14,8 +14,9 @@ consequential decision, and drills that let teams practice before real incidents
 cp .env.example .env.local   # fill in keys
 npm install
 npm run db:start             # local Supabase (needs Docker Desktop)
-npm run db:migrate && npm run db:seed
+npm run db:migrate && npm run agents:sync && npm run db:seed
 npm run dev                  # app
 npm run inngest              # workflow dev server
-cd services/optimizer && pip install -r requirements.txt && uvicorn main:app --reload --port 8001
+cd services/optimizer && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt  # once
+npm run optimizer            # optimizer service on :8001
 ```

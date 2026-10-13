@@ -20,6 +20,8 @@ export interface RunInput {
   task: string;
   /** Untrusted text (user reports, documents). Always wrapped, never trusted. */
   untrusted?: string[];
+  /** The agent_configs version this config came from, recorded on the run. */
+  agentVersion?: number;
 }
 
 export interface RunnerDeps {
@@ -106,7 +108,7 @@ export async function runAgent(input: RunInput, deps: RunnerDeps = {}): Promise<
       });
     } catch (err) {
       if (err instanceof AgentLoopError) {
-        await recordFailedRun(sql, { ...base, ...err.spent, status: "error" });
+        await recordFailedRun(sql, { ...base, ...err.spent, agentConfigVersion: input.agentVersion ?? null, status: "error" });
       }
       throw err;
     }
@@ -117,7 +119,7 @@ export async function runAgent(input: RunInput, deps: RunnerDeps = {}): Promise<
 
   const { answer, rejected } = await checkSources(sql, ctx.worldId, loop.answer);
   const record = DecisionRecord.parse({ ...base, answer, rejectedSources: rejected });
-  const run: RunRow = { ...base, model: loop.model, usage: loop.usage, costUsd: loop.costUsd, latencyMs: loop.latencyMs, status: loop.status };
+  const run: RunRow = { ...base, agentConfigVersion: input.agentVersion ?? null, model: loop.model, usage: loop.usage, costUsd: loop.costUsd, latencyMs: loop.latencyMs, status: loop.status };
   const ids = await recordRun(sql, run, record);
 
   return {

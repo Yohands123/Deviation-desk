@@ -194,11 +194,12 @@ deviation-desk/
 │   │   ├── registry.ts       ← agent configs (move to DB in Phase 3)
 │   │   ├── runner.ts         ← generic agent runner (tool loop, validation, tracing)
 │   │   └── tools/            ← tools agents may call (all read via world_id)
-│   ├── workflows/            ← Inngest functions (agent chains, sim clock, sweeps)
+│   ├── workflows/            ← event handlers, Inngest functions, approval gate, local runner
+│   ├── approvals/            ← recording decisions, seats, executors, escalation
 │   ├── monitoring/           ← Layer-1 watchers (non-AI rules)
 │   ├── sim/                  ← scenario schema, spread engine, saboteurs, clock
 │   ├── db/                   ← Postgres client, migrations, typed queries, trace, cloning, seed
-│   └── lib/                  ← shared utilities
+│   └── lib/                  ← shared utilities (optimizer client)
 ├── evals/
 │   ├── scenarios/            ← seeded scenario fixtures with hidden truths
 │   └── run.ts                ← eval harness (create in Phase 2)
@@ -398,7 +399,9 @@ npm run inngest        # Inngest dev server
 npm run db:start       # start local Supabase (Docker); db:stop to stop it
 npm run db:migrate     # apply db/migrations to DATABASE_URL
 npm run db:seed        # seed the Helix Biologics demo company into the live world
-npm run db:reset       # wipe the local database, migrate, and seed
+npm run db:reset       # wipe the local database, migrate, sync agents, and seed
+npm run agents:sync    # write agent definitions (registry.ts) to the database as new versions
+npm run optimizer      # start the optimizer service on :8001 (needed by evals and the Rerouter)
 npm run test           # unit tests (no database)
 npm run test:db        # database tests (needs db:start; each file seeds its own company)
 npm run test:e2e       # Playwright
@@ -406,7 +409,8 @@ npm run evals          # scenario eval suite (calls Claude, ~$0.50 per scenario)
 npm run typecheck      # tsc --noEmit
 npm run lint
 ```
-Optimizer: `cd services/optimizer && uvicorn main:app --reload --port 8001`.
+Optimizer setup (once): `cd services/optimizer && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+(`.venv/bin/pip` on macOS/Linux). Then `npm run optimizer`.
 
 ---
 
@@ -509,10 +513,29 @@ Phase 2 notes:
   incident exists.
 
 ### Phase 3 — Containment, logistics, approvals
-- [ ] Spread Tracker, Quarantine Officer, Inventory Agent, Rerouter (calls optimizer), Cold Chain
+- [x] Spread Tracker, Quarantine Officer, Inventory Agent, Rerouter (calls optimizer), Cold Chain
       Monitor, Supplier Liaison.
-- [ ] Approvals table and `waitForEvent` flow with escalation timeouts.
-- [ ] Move agent configs from `registry.ts` into the database.
+- [x] Approvals table and `waitForEvent` flow with escalation timeouts.
+- [x] Move agent configs from `registry.ts` into the database.
+
+Phase 3 notes:
+- Every consequential approval belongs to an incident. Supplier delays and temperature excursions
+  reach their agents through Intake Triage (a `supply` or `cold_chain` incident) and the Dispatcher.
+- Approvals: `src/approvals/` (see docs/AGENTS.md §Approvals). Escalation notifies the Executive
+  and never transfers authority. Executors run only after an approved row exists, once per
+  decision, in the decision's world. `contact_supplier` is recorded, not sent (Phase 7).
+- Agent configs: `agent_configs` holds the current version, `agent_config_versions` every version
+  (append-only), and `agent_runs.agent_config_version` which one produced each run. `registry.ts`
+  is the reviewed default; `npm run agents:sync` writes changes. Evals sync before running.
+- Arithmetic stays in code (principle 10): `src/db/inventory.ts` (stock position, uncovered
+  orders, used for shortfall detection), `src/monitoring/excursions.ts` (excursion duration and
+  peak), and the optimizer via `optimize_routes`. Migration 0003 adds `lanes`.
+- Layer-1 reading watcher (`src/monitoring/run-watchers.ts`) runs every 5 minutes in Inngest over
+  live worlds and writes a heartbeat per world. Alerting on a missing heartbeat is not built yet.
+- Evals auto-approve with AI-played seats (drill worlds only). Scenarios: `contamination-001`,
+  `em-trend-001`, `cold-chain-001`, `supplier-delay-001` (includes a prompt-injection attempt).
+  All four pass; a full run costs about $1.60. `cold-chain-001` passed 3 of 3 runs after fixes.
+- Optimizer requirements are pinned; the Rerouter uses the existing `/allocate` endpoint.
 
 ### Phase 4 — The Incident Room UI
 - [ ] Seat picker, Incident Room (flat map first), live feed, decision card, evidence with sources.

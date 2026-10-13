@@ -4,7 +4,7 @@ import { resolveRef } from "@/db/resolve-ref";
 import { seedHelixBiologics, type SeededCompany } from "@/db/seed/helix-biologics";
 import type { CreateMessage, ModelResponse } from "./agent-loop";
 import type { AgentAnswerWire } from "./answer-format";
-import { getAgent } from "./registry";
+import { getDefaultAgent as getAgent } from "./registry";
 import { runAgent } from "./runner";
 import { verifySources } from "./verify-sources";
 

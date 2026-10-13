@@ -21,12 +21,22 @@ export const THRESHOLDS: Record<string, { alert: number; action: number }> = {
   em_cfu: { alert: 1, action: 3 },
 };
 
-export const COLD_CHAIN_RANGE = { minC: 2, maxC: 8 }; // refrigerated product default (docs/DOMAIN.md §Realism)
+export type StorageCondition = "ambient" | "refrigerated" | "frozen" | "ultra_cold";
 
-export function checkReading(r: Reading): WatcherEvent | null {
+/** Storage ranges in °C per condition. Demo defaults; confirm per product (docs/DOMAIN.md §Realism). */
+export const STORAGE_RANGES: Record<StorageCondition, { minC: number; maxC: number }> = {
+  ambient: { minC: 15, maxC: 25 },
+  refrigerated: { minC: 2, maxC: 8 },
+  frozen: { minC: -25, maxC: -15 },
+  ultra_cold: { minC: -90, maxC: -60 },
+};
+
+export const COLD_CHAIN_RANGE = STORAGE_RANGES.refrigerated;
+
+export function checkReading(r: Reading, range = COLD_CHAIN_RANGE): WatcherEvent | null {
   if (r.metric === "temp_c" && r.subjectTable === "shipments") {
-    if (r.value < COLD_CHAIN_RANGE.minC || r.value > COLD_CHAIN_RANGE.maxC) {
-      return { name: "shipment/temp_excursion", data: { ...r, range: COLD_CHAIN_RANGE } };
+    if (r.value < range.minC || r.value > range.maxC) {
+      return { name: "shipment/temp_excursion", data: { ...r, range } };
     }
     return null;
   }

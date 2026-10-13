@@ -23,6 +23,7 @@ export const CLONED_TABLES = [
   "batch_equipment_usage",
   "batch_material_usage",
   "locations",
+  "lanes",
   "inventory_lots",
   "orders",
   "shipments",
