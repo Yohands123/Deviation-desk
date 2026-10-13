@@ -8,6 +8,7 @@ import { useState, useTransition } from "react";
 import { decide } from "@/incident-room/actions";
 import type { AgentCard } from "@/incident-room/types";
 import { AiMarker, ConfidenceMeter, cx, DecisionStatusBadge } from "../ui";
+import { Advisories } from "./regulatory";
 import { SourceChips } from "./source-drawer";
 
 type Outcome = "approved" | "rejected" | "override" | "more_evidence";
@@ -112,6 +113,7 @@ export function DecisionCard({ code, card, world }: { code: string; card: AgentC
           <SourceChips sources={card.sources} />
         </div>
       </div>
+      <Advisories items={card.advisories} />
 
       {card.decision && card.status === "more_evidence" && (
         <p className="mt-3 text-sm text-muted">

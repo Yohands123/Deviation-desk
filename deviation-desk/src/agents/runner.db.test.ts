@@ -114,4 +114,19 @@ describe("runAgent", () => {
     expect(model.calls()).toBe(0);
     expect(result.status).toBe("budget_exceeded");
   });
+
+  it("caps runs outside incidents with a rolling daily budget", async () => {
+    // signal_watcher: $0.50 per run, so $5.00 a day outside incidents. Yesterday's spend does not count.
+    const run = (costUsd: string, createdAt = new Date()) =>
+      sql`insert into agent_runs ${sql({ worldId: helix.worldId, companyId: helix.companyId, incidentId: null, agentId: "signal_watcher", model: "x", costUsd, status: "ok", createdAt })}`;
+    await run("9.0000", new Date(Date.now() - 30 * 3_600_000));
+    await run("4.5000");
+    const model = modelReturning(answerWith([]));
+    const first = await runAgent({ agent: getAgent("signal_watcher"), ctx: ctx(), task: "t" }, model);
+    expect(first.status).not.toBe("budget_exceeded");
+    await run("1.0000");
+    const second = await runAgent({ agent: getAgent("signal_watcher"), ctx: ctx(), task: "t" }, modelReturning(answerWith([])));
+    expect(second.status).toBe("budget_exceeded");
+    expect(second.record.answer.summary).toMatch(/budget for today is used up/);
+  });
 });

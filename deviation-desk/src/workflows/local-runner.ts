@@ -6,10 +6,14 @@
  * with `autoApprove`, are approved by an AI seat. The database and recordApproval only allow that
  * in drill worlds.
  */
+import { z } from "zod";
 import { recordApproval } from "@/approvals/record-approval";
 import { getSql } from "@/db/client";
 import { ApprovalRequested, type Emitted } from "./events";
 import { handlers, type StepRunner } from "./handlers";
+import { isPaused, RUNS_WHILE_PAUSED } from "./incidents";
+
+const IncidentRef = z.object({ worldId: z.uuid(), incidentId: z.uuid() });
 
 export interface ProcessedEvent extends Emitted {
   handled: boolean;
@@ -44,7 +48,10 @@ export async function runLocally(first: Emitted, options: LocalRunOptions = {}):
   while (queue.length > 0) {
     if (processed.length >= maxEvents) throw new Error(`Event chain exceeded ${maxEvents} events; possible loop.`);
     const event = queue.shift() as Emitted; // non-empty: checked by the loop condition
-    const list = handlers[event.name] ?? [];
+    // The local runner cannot wait for a resume, so a paused incident's work is skipped.
+    const ref = IncidentRef.safeParse(event.data);
+    const paused = ref.success && !RUNS_WHILE_PAUSED.has(event.name) && (await isPaused(getSql(), ref.data.worldId, ref.data.incidentId));
+    const list = paused ? [] : (handlers[event.name] ?? []);
     const approvable = event.name === "approval/requested" && options.autoApprove === true;
     processed.push({ ...event, handled: list.length > 0 || approvable });
     if (approvable) queue.push(await approveAsAiSeat(event.data));

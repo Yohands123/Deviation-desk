@@ -1,0 +1,68 @@
+{
+  "id": "orders-001",
+  "seed": 6101,
+  "evalOnly": true,
+  "scenario": {
+    "title": "Urgent order larger than released stock",
+    "description": "Northshore Hospital Pharmacy orders 9,000 units due in 36 hours. Released stock cannot cover it; the rest waits on batches still in sterility testing. The Scheduler must refuse the impossible date and show when it can really arrive.",
+    "level": 2,
+    "durationTicks": 24,
+    "trigger": {
+      "type": "urgent_order",
+      "target": {
+        "table": "locations",
+        "code": "Northshore Hospital Pharmacy"
+      },
+      "atTick": 0,
+      "params": {
+        "quantity": 9000,
+        "dueInHours": 36,
+        "priority": "high"
+      }
+    },
+    "spread": {
+      "mode": "normal",
+      "perTickProbability": 0,
+      "edgeTypes": []
+    },
+    "twists": [],
+    "redHerrings": [],
+    "success": {
+      "containWithinTicks": 24,
+      "mustProtect": []
+    }
+  },
+  "hiddenTruth": {
+    "rootCause": "Demand exceeds released stock; the remainder depends on batches in sterility testing.",
+    "causeObject": {
+      "table": "locations",
+      "code": "Northshore Hospital Pharmacy"
+    },
+    "acceptableAnswers": [
+      "released stock"
+    ]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "scoreRootCause": false,
+    "agentsThatMustRun": [
+      "order_desk",
+      "scheduler"
+    ],
+    "proposals": [
+      {
+        "actionType": "order_check",
+        "mentions": [
+          "ORD-1048"
+        ]
+      },
+      {
+        "actionType": "schedule_options",
+        "mentions": [
+          "ORD-1048",
+          "\"ontime\":false"
+        ]
+      }
+    ]
+  }
+}

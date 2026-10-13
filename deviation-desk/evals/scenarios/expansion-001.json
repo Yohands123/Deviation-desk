@@ -1,0 +1,72 @@
+{
+  "id": "expansion-001",
+  "seed": 7702,
+  "evalOnly": true,
+  "scenario": {
+    "title": "Weekly expansion review",
+    "description": "The weekly review: the Supplier Scout should find the single-source stopper and vial suppliers, the planners look at capacity and the network, every proposal is simulated, the Readiness Checker reviews it and the Expansion Lead ranks.",
+    "level": 1,
+    "durationTicks": 24,
+    "trigger": {
+      "type": "expansion_review",
+      "target": {
+        "table": "suppliers",
+        "code": "Nordvial Closures"
+      },
+      "atTick": 0,
+      "params": {}
+    },
+    "spread": {
+      "mode": "normal",
+      "perTickProbability": 0,
+      "edgeTypes": []
+    },
+    "twists": [],
+    "redHerrings": [],
+    "success": {
+      "containWithinTicks": 24,
+      "mustProtect": []
+    }
+  },
+  "hiddenTruth": {
+    "rootCause": "Stoppers and vials each have a single approved supplier.",
+    "causeObject": {
+      "table": "suppliers",
+      "code": "Nordvial Closures"
+    },
+    "acceptableAnswers": [
+      "single source"
+    ]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "scoreRootCause": false,
+    "agentsThatMustRun": [
+      "supplier_scout",
+      "capacity_planner",
+      "network_planner",
+      "readiness_checker",
+      "expansion_lead"
+    ],
+    "proposals": [
+      {
+        "actionType": "propose_expansion",
+        "mentions": [
+          "backup_supplier"
+        ]
+      },
+      {
+        "actionType": "readiness_check",
+        "mentions": [
+          "EXP-"
+        ]
+      },
+      {
+        "actionType": "rank_proposals",
+        "mentions": [
+          "EXP-"
+        ]
+      }
+    ]
+  }
+}

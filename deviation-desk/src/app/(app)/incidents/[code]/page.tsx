@@ -24,7 +24,7 @@ export default async function IncidentPage({
       back={{ href: "/incidents", label: "Incidents" }}
       seatChoose={seat === "choose"}
       engineDown={engine === "down"}
-      auditorNote="The Auditor reviews skipped steps and unowned tasks once it joins in Phase 7."
+      auditorNote="The Auditor checks open incidents every hour for unowned or overdue work and reporting deadlines, and grades the response when the incident closes."
     />
   );
 }

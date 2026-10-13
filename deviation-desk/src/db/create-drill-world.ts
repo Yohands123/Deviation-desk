@@ -31,6 +31,10 @@ export const CLONED_TABLES = [
   "sensor_readings",
   "people",
   "records",
+  "contacts",
+  "regulatory_rules",
+  "capacity_resources",
+  "investment_options",
 ] as const;
 
 /** World-scoped tables a drill starts empty: incident history and the audit trail stay in their own world. */
@@ -44,6 +48,13 @@ export const NOT_CLONED_TABLES = [
   "decision_records",
   "approvals",
   "sim_effects", // each drill's own simulation log
+  "regulatory_obligations",
+  "outbound_messages", // drill messages are recorded and never sent
+  "expansion_proposals", // planning happens in the live world
+  "expansion_simulations",
+  "expansion_decisions",
+  "agent_lessons", // read company-wide by the runner
+  "agent_lesson_decisions",
 ] as const;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;

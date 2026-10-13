@@ -8,7 +8,7 @@ import { getSql, type Sql } from "@/db/client";
 import { AgentLoopError, runAgentLoop, type CreateMessage, type LoopResult } from "./agent-loop";
 import { DecisionRecord, type AgentAnswer, type AgentConfig } from "./contract";
 import { modelFor } from "./models";
-import { recordFailedRun, recordRun, spentOnIncident, type RunRow } from "./persist";
+import { recordFailedRun, recordRun, budgetUse, type RunRow } from "./persist";
 import { tools as allTools } from "./tools";
 import type { AgentTool, ToolContext } from "./tools/types";
 import { verifySources } from "./verify-sources";
@@ -75,7 +75,9 @@ export async function runAgent(input: RunInput, deps: RunnerDeps = {}): Promise<
   const { agent, ctx } = input;
   const base = { worldId: ctx.worldId, companyId: ctx.companyId, incidentId: ctx.incidentId, agentId: agent.id };
 
-  const remaining = agent.costBudgetUsd - (await spentOnIncident(sql, ctx.worldId, agent.id, ctx.incidentId));
+  const budget = await budgetUse(sql, ctx.worldId, agent.id, ctx.incidentId, agent.costBudgetUsd);
+  // One run never gets more than the agent's per-run budget, even with daily budget left.
+  const remaining = Math.min(agent.costBudgetUsd, budget.limit - budget.spent);
 
   let loop: LoopResult;
   if (remaining <= 0) {
@@ -89,8 +91,8 @@ export async function runAgent(input: RunInput, deps: RunnerDeps = {}): Promise<
       validationErrors: [],
       answer: {
         kind: "insufficient_evidence",
-        summary: `${agent.name} did not run: its cost budget for this incident is used up.`,
-        reasoning: `Budget $${agent.costBudgetUsd.toFixed(2)} per incident. A person can raise it or proceed without this agent.`,
+        summary: `${agent.name} did not run: its cost budget ${ctx.incidentId ? "for this incident" : "for today"} is used up.`,
+        reasoning: `Budget $${budget.limit.toFixed(2)} ${ctx.incidentId ? "per incident" : "per day outside incidents"}. A person can raise it or proceed without this agent.`,
         sources: [],
         confidence: "insufficient",
         alternatives: [],

@@ -9,6 +9,8 @@ const base: Score = {
   proposalsMissing: [],
   forbiddenProposals: [],
   fabricatedSources: 0,
+  outboxLeaks: 0,
+  checksFailed: [],
   costUsd: 0,
   durationMs: 0,
   ticksToContain: null,
@@ -59,6 +61,8 @@ describe("scoring", () => {
     expect(passed({ ...base, error: "boom" })).toBe(false);
     expect(passed({ ...base, proposalsMissing: ["hold_shipment: SH-118"] })).toBe(false);
     expect(passed({ ...base, forbiddenProposals: ["recall"] })).toBe(false);
+    expect(passed({ ...base, outboxLeaks: 1 })).toBe(false);
+    expect(passed({ ...base, checksFailed: ["council votes: 2 of 3"] })).toBe(false);
   });
 
   it("does not fail a scenario that does not score a root cause", () => {

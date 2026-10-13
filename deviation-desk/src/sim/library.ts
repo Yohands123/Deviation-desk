@@ -13,6 +13,8 @@ export const ScenarioFile = z.object({
   seed: z.number().int(),
   scenario: Scenario,
   hiddenTruth: HiddenTruth,
+  /** Eval-only files (several incidents, scripted conflicts) are not drills a team can run. */
+  evalOnly: z.boolean().default(false),
 });
 export type ScenarioFile = z.infer<typeof ScenarioFile>;
 
@@ -20,7 +22,8 @@ export function readScenarioFiles(dir: string): ScenarioFile[] {
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort()
-    .map((f) => ScenarioFile.parse(JSON.parse(readFileSync(join(dir, f), "utf8"))));
+    .map((f) => ScenarioFile.parse(JSON.parse(readFileSync(join(dir, f), "utf8"))))
+    .filter((f) => !f.evalOnly);
 }
 
 /** Adds library scenarios a company does not have yet. Returns the titles added. */

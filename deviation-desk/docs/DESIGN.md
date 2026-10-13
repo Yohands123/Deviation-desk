@@ -117,6 +117,36 @@ Mode badge: Chase (orange), Scatter (blue), Frightened · reversed (light).
   Auditor review with "Ask the Auditor", the full timeline with hidden effects marked and reversals
   struck through, decision speed per seat, integrity and agent cost.
 
+## Phase 7 screens as built
+
+- Main navigation: Incidents · Orders · Strategy · Agents · Drills.
+- Incident Room, right column, added in this order under the Decision Board:
+  - **Regulatory and messages:**
+    - confirmed obligations with the due time and hours left (amber under 12 h, red when overdue)
+    - every approved message with its delivery status ("Sent", "Approved, not sent (no delivery
+      channel)", "Drill: recorded, never sent") and the text exactly as approved
+    - a line saying the demo library is fictional
+  - **Auditor:** the latest sweep finding or graded review (team grade, top fixes).
+  - **Close the incident:** QA Director, live incidents only.
+- Incident Room, other additions:
+  - Proposal cards carry Regulator A's notes as "advice, not a ruling".
+  - Decision Board conflicts show the Event Council's votes (AI-tinted): "Operations: Sides with the
+    QA Director. …".
+  - A paused incident shows an amber banner with the reason, plus **Resume** for the Executive.
+- **Orders:**
+  - a "Log an order" form, and orders with their coverage
+  - the Order Desk's and Scheduler's findings under each order, with the options and trade-offs in
+    a details block
+- **Strategy & Growth:**
+  - the Expansion Lead's ranking
+  - proposal cards: kind, cost, lead time, the change, the "Simulate before you build" table (today
+    vs with the change; green better, red worse, grey "No change"), the readiness verdict and gaps,
+    the decision log, and Approve / Reject for the seat that may decide
+  - a Launch Planner question box
+- **Agents:**
+  - lessons, proposed first, with Approve / Reject / Retire for the QA Director and Executive
+  - the live track-record table (fabricated sources in red when above zero)
+
 ## Copy
 
 Plain verbs, active voice, specific. Buttons say what happens ("Run confirmation swab first",

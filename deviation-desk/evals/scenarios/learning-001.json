@@ -1,0 +1,57 @@
+{
+  "id": "learning-001",
+  "seed": 8803,
+  "evalOnly": true,
+  "scenario": {
+    "title": "Weekly learning review",
+    "description": "The Supply Chain Lead rejected the Quarantine Officer's shipment holds three times for the same reason: a delivered shipment cannot be held. The Learning Loop should propose one lesson for the Quarantine Officer.",
+    "level": 1,
+    "durationTicks": 24,
+    "trigger": {
+      "type": "learning_review",
+      "target": {
+        "table": "people",
+        "code": "Tomás Reyes"
+      },
+      "atTick": 0,
+      "params": {}
+    },
+    "spread": {
+      "mode": "normal",
+      "perTickProbability": 0,
+      "edgeTypes": []
+    },
+    "twists": [],
+    "redHerrings": [],
+    "success": {
+      "containWithinTicks": 24,
+      "mustProtect": []
+    }
+  },
+  "hiddenTruth": {
+    "rootCause": "The Quarantine Officer keeps proposing holds on delivered shipments.",
+    "causeObject": {
+      "table": "people",
+      "code": "Tomás Reyes"
+    },
+    "acceptableAnswers": [
+      "delivered shipments"
+    ]
+  },
+  "expectations": {
+    "maxFabricatedSources": 0,
+    "scoreRootCause": false,
+    "agentsThatMustRun": [
+      "learning_loop"
+    ],
+    "proposals": [
+      {
+        "actionType": "propose_lesson",
+        "mentions": [
+          "quarantine_officer",
+          "deliver"
+        ]
+      }
+    ]
+  }
+}

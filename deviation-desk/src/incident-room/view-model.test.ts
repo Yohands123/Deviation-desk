@@ -32,6 +32,7 @@ const card = (over: Partial<AgentCard>): AgentCard => ({
   status: "pending",
   decision: null,
   rejectedSourceCount: 0,
+  advisories: [],
   ...over,
 });
 
@@ -103,7 +104,7 @@ describe("describeEvent", () => {
 describe("small helpers", () => {
   it("labels actions in plain words", () => {
     expect(actionLabel("reroute_supply")).toBe("Reroute supply");
-    expect(actionLabel("submit_notification")).toBe("Submit notification");
+    expect(actionLabel("reallocate_trial_supply")).toBe("Reallocate trial supply");
   });
 
   it("fills the confidence bar from the score, or the word", () => {

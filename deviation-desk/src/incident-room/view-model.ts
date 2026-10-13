@@ -19,6 +19,11 @@ const ACTION_LABELS: Record<string, string> = {
   link_to_incident: "Link to incident",
   activate_agents: "Activate agents",
   confirm_signal: "Confirm signal",
+  confirm_reporting_obligation: "Confirm reporting obligation",
+  submit_notification: "Submit to the regulator",
+  notify_customer: "Notify customer",
+  notify_trial_site: "Notify trial site",
+  notify_staff: "Brief staff",
 };
 
 export function actionLabel(type: string): string {
@@ -133,6 +138,12 @@ export function describeEvent(e: EventRow, names: { people: Map<string, string>;
       return human(`Raised a conflict with the ${SEAT_LABELS[p.withSeat as SeatRole] ?? "other seat"}: ${str(p.summary)}`);
     case "conflict_resolved":
       return human(`Resolved a conflict: ${str(p.note)}`);
+    case "closed":
+      return human(`Closed the incident: ${str(p.reason)}`);
+    case "paused":
+      return system(`Paused by the Executive's decision: ${str(p.reason)} Agent work waits until it is resumed.`);
+    case "resumed":
+      return human("Resumed the incident; waiting agent work continues.");
     case "linked_report":
       return { ...base, actorKind: "ai", actor: names.agents.get("intake_triage") ?? "Intake Triage", text: `Linked a new report: ${str(p.summary)}` };
     default:

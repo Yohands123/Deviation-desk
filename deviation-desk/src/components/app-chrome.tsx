@@ -37,6 +37,9 @@ export function MainNav() {
   return (
     <nav aria-label="Main" className="flex items-center gap-1">
       {link("/incidents", "Incidents", path.startsWith("/incidents") || path === "/report")}
+      {link("/orders", "Orders", path.startsWith("/orders"))}
+      {link("/strategy", "Strategy", path.startsWith("/strategy"))}
+      {link("/agents", "Agents", path.startsWith("/agents"))}
       {link("/drills", "Drills", isDrill(path))}
     </nav>
   );

@@ -27,11 +27,7 @@ import {
   LinkToIncidentParams,
   OpenIncidentParams,
 } from "@/agents/action-params";
-import { loadAgent } from "@/agents/configs";
-import type { AgentAnswer } from "@/agents/contract";
-import { runAgent } from "@/agents/runner";
 import { executeApproved } from "@/approvals/executors";
-import { getSql, type Sql } from "@/db/client";
 import { getInventoryPosition } from "@/db/inventory";
 import {
   DecisionResolved,
@@ -49,20 +45,22 @@ import {
   TempExcursion,
   type Emitted,
 } from "./events";
-import { activatedAgents, addIncidentEvent, describeIncident, firstTime, incidentSeverity, openIncident } from "./incidents";
+import { addIncidentEvent, describeIncident, firstTime, openIncident } from "./incidents";
+import { councilHandlers } from "./council-handlers";
+import { expansionHandlers } from "./expansion-handlers";
+import { orderHandlers } from "./order-handlers";
+import { oversightHandlers } from "./oversight-handlers";
+import { regulatoryHandlers } from "./regulatory-handlers";
+import { approvalRequest, decide, incidentScope, isActive, sqlFor, type Decision, type Handler, type NamedHandler, type Scope, type StepRunner } from "./agent-steps";
 
-export type StepRunner = <T>(id: string, fn: () => Promise<T>) => Promise<T>;
-export type Handler = (run: StepRunner, data: unknown) => Promise<Emitted[]>;
-export interface NamedHandler {
-  id: string;
-  handle: Handler;
-}
+export type { Handler, NamedHandler, StepRunner };
 
 /** Agents the Dispatcher may activate for an incident. */
 const ACTIVATABLE = new Set([
   "evidence_collector",
   "root_cause_analyst",
   "devils_advocate",
+  "trial_runner",
   "spread_tracker",
   "quarantine_officer",
   "inventory_agent",
@@ -71,54 +69,6 @@ const ACTIVATABLE = new Set([
 ]);
 /** Shortfalls handled per hold, so one large hold cannot fan out into dozens of agent runs. */
 const MAX_SHORTFALLS_PER_HOLD = 3;
-
-// Type aliases (not interfaces) so they can be used directly as event payloads.
-type Scope = {
-  worldId: string;
-  companyId: string;
-};
-type IncidentScope = Scope & {
-  incidentId: string;
-};
-interface Decision {
-  decisionRecordId: string;
-  answer: AgentAnswer;
-}
-
-const sqlFor = (): Sql => getSql();
-
-async function decide(sql: Sql, agentId: string, scope: Scope & { incidentId: string | null }, task: string, untrusted?: string[]): Promise<Decision> {
-  const { config, version } = await loadAgent(sql, agentId);
-  const result = await runAgent({ agent: config, agentVersion: version, ctx: { ...scope, agentId }, task, untrusted });
-  return { decisionRecordId: result.decisionRecordId, answer: result.record.answer };
-}
-
-/** When a decision needs a human, records the request and returns the event the approval gate waits on. */
-async function approvalRequest(run: StepRunner, sql: Sql, scope: IncidentScope, decision: Decision, stepId: string): Promise<Emitted[]> {
-  const { answer } = decision;
-  if (!answer.requiresApproval || !answer.approvalSeat || !answer.proposedAction) return [];
-  const { approvalSeat: seat, proposedAction } = answer;
-  const severity = await run(`${stepId}-request-approval`, async () => {
-    await addIncidentEvent(sql, scope, {
-      actorType: "system",
-      actorId: "workflow",
-      eventType: "approval_requested",
-      payload: { decisionRecordId: decision.decisionRecordId, seat, actionType: proposedAction.type },
-    });
-    return incidentSeverity(sql, scope.worldId, scope.incidentId);
-  });
-  return [
-    {
-      name: "approval/requested",
-      data: { ...scope, decisionRecordId: decision.decisionRecordId, seat, actionType: proposedAction.type, severity },
-    },
-  ];
-}
-
-const isActive = async (run: StepRunner, sql: Sql, scope: IncidentScope, agentId: string, stepId: string) =>
-  (await run(stepId, () => activatedAgents(sql, scope.worldId, scope.incidentId))).includes(agentId);
-
-const incidentScope = (e: IncidentScope): IncidentScope => ({ worldId: e.worldId, companyId: e.companyId, incidentId: e.incidentId });
 
 // ─── Early warning and intake ────────────────────────────────────────
 
@@ -387,7 +337,7 @@ const liaiseSupplier: Handler = async (run, data) => {
 
 const one = (id: string, handle: Handler): NamedHandler[] => [{ id, handle }];
 
-export const handlers: Readonly<Record<string, readonly NamedHandler[]>> = {
+const coreHandlers: Readonly<Record<string, readonly NamedHandler[]>> = {
   "sensor/anomaly": one("signal-watch", onSensorAnomaly),
   "shipment/temp_excursion": one("cold-chain", onTempExcursion),
   "signal/confirmed": one("triage-signal", onSignalConfirmed),
@@ -406,3 +356,12 @@ export const handlers: Readonly<Record<string, readonly NamedHandler[]>> = {
   "hold/approved": one("after-hold", onHoldApproved),
   "shortfall/detected": one("reroute", onShortfall),
 };
+
+/** Handlers for one event from several chains, in order: the core chain first. */
+function mergeHandlers(...maps: Readonly<Record<string, readonly NamedHandler[]>>[]): Readonly<Record<string, readonly NamedHandler[]>> {
+  const out: Record<string, NamedHandler[]> = {};
+  for (const map of maps) for (const [event, list] of Object.entries(map)) out[event] = [...(out[event] ?? []), ...list];
+  return out;
+}
+
+export const handlers = mergeHandlers(coreHandlers, regulatoryHandlers, councilHandlers, orderHandlers, expansionHandlers, oversightHandlers);

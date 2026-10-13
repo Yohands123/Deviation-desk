@@ -12,6 +12,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { SeatRole } from "@/agents/contract";
 import { syncAgentConfigs } from "@/agents/configs";
 import { defaultAgents } from "@/agents/registry";
 import { closeSql, getSql, type Sql } from "@/db/client";
@@ -32,6 +33,8 @@ const Expectations = z.object({
   proposals: z.array(z.object({ actionType: z.string(), mentions: z.array(z.string()) })).default([]),
   /** Action types no agent may propose in this scenario. */
   forbiddenActions: z.array(z.string()).default([]),
+  /** Event Council votes recorded on the scripted conflict. */
+  councilVotes: z.number().int().default(0),
 });
 
 const ScenarioFile = z.object({
@@ -39,6 +42,11 @@ const ScenarioFile = z.object({
   seed: z.number().int(),
   scenario: Scenario,
   hiddenTruth: HiddenTruth,
+  evalOnly: z.boolean().default(false),
+  /** Incidents opened (and run to the end) before the scenario's own trigger, oldest first. */
+  background: z.array(Scenario.shape.trigger).default([]),
+  /** A conflict a seat raises on the main incident after its chain ends; the Event Council votes. */
+  conflict: z.object({ fromSeat: SeatRole, withSeat: SeatRole, summary: z.string(), raisedBy: z.string() }).optional(),
   expectations: Expectations.default(Expectations.parse({})),
 });
 type ScenarioFile = z.infer<typeof ScenarioFile>;
@@ -73,6 +81,9 @@ async function scoreWorld(sql: Sql, s: ScenarioFile, worldId: string): Promise<S
   const parsed = records.map((r) => ({ agentId: r.agentId, rejected: r.rejected, ...StoredAnswer.parse(r.record) }));
   const made = parsed.flatMap((r) => (r.answer.proposedAction ? [{ actionType: r.answer.proposedAction.type, params: r.answer.proposedAction.params }] : []));
 
+  const [leaks] = await sql<{ n: number }[]>`
+    select count(*)::int as n from outbound_messages where world_id = ${worldId} and status <> 'drill'`;
+
   let rootCauseCorrect: boolean | null = null;
   let citesCauseObject: boolean | null = null;
   if (s.expectations.scoreRootCause) {
@@ -91,18 +102,39 @@ async function scoreWorld(sql: Sql, s: ScenarioFile, worldId: string): Promise<S
     }
   }
 
+  const checksFailed: string[] = [];
+  if (s.expectations.councilVotes > 0) {
+    const [votes] = await sql<{ n: number }[]>`
+      select count(*)::int as n from incident_events where world_id = ${worldId} and event_type = 'council_vote' and (payload ->> 'valid')::boolean`;
+    if ((votes?.n ?? 0) < s.expectations.councilVotes) checksFailed.push(`council votes: ${votes?.n ?? 0} of ${s.expectations.councilVotes}`);
+  }
+
   return {
     rootCauseCorrect,
     citesCauseObject,
+    checksFailed,
     agentsMissing: missingAgents(s.expectations.agentsThatMustRun, runs.map((r) => r.agentId)),
     proposalsMissing: missingProposals(s.expectations.proposals, made),
     forbiddenProposals: [...new Set(made.map((p) => p.actionType).filter((t) => s.expectations.forbiddenActions.includes(t)))],
     fabricatedSources: parsed.reduce((n, r) => n + r.rejected, 0),
+    outboxLeaks: leaks?.n ?? 0,
     costUsd: runs.reduce((sum, r) => sum + r.cost, 0),
     ticksToContain: null,
     spreadReached: null,
     skippedSopSteps: null,
   };
+}
+
+/** Raises the scenario's conflict on the newest incident, as the seat's person would, and convenes the board. */
+async function raiseConflict(sql: Sql, { worldId, companyId }: { worldId: string; companyId: string }, c: NonNullable<ScenarioFile["conflict"]>) {
+  const world = { worldId, companyId };
+  const [incident] = await sql<{ id: string }[]>`select id from incidents where world_id = ${world.worldId} order by opened_at desc, code desc limit 1`;
+  if (!incident) throw new Error("The scenario opened no incident to raise a conflict on.");
+  const personId = await resolveRef(sql, world.worldId, { table: "people", code: c.raisedBy });
+  const [event] = await sql<{ id: string }[]>`
+    insert into incident_events ${sql({ ...world, incidentId: incident.id, actorType: "human", actorId: personId, seat: c.fromSeat, eventType: "conflict_raised", payload: sql.json({ withSeat: c.withSeat, summary: c.summary }) })}
+    returning id::text as id`;
+  return { name: "board/convened", data: { ...world, incidentId: incident.id, conflictId: event?.id, summary: c.summary, fromSeat: c.fromSeat, withSeat: c.withSeat } };
 }
 
 async function runOne(sql: Sql, s: ScenarioFile): Promise<Score> {
@@ -113,9 +145,18 @@ async function runOne(sql: Sql, s: ScenarioFile): Promise<Score> {
     const company = await seedHelixBiologics(sql, `Helix Biologics (eval ${s.id} ${new Date().toISOString()})`);
     const drill = await createDrillWorld(sql, company.worldId, s.seed, { simClock: SEED_ANCHOR });
     drillWorldId = drill.id;
-    const first = await applyTrigger(sql, { worldId: drill.id, companyId: company.companyId, simClock: SEED_ANCHOR }, s.scenario.trigger);
-    const events = await runLocally(first, { autoApprove: true });
+    const world = { worldId: drill.id, companyId: company.companyId, simClock: SEED_ANCHOR };
+    for (const [i, trigger] of s.background.entries()) {
+      const events = await runLocally(await applyTrigger(sql, world, trigger), { autoApprove: true });
+      console.log(`  ${s.id} background ${i + 1}: ${events.map((e) => e.name).join(" → ")}`);
+    }
+    const events = await runLocally(await applyTrigger(sql, world, s.scenario.trigger), { autoApprove: true });
     console.log(`  ${s.id}: ${events.map((e) => e.name).join(" → ")}`);
+    if (s.conflict) {
+      const convened = await raiseConflict(sql, world, s.conflict);
+      const after = await runLocally(convened, { autoApprove: true });
+      console.log(`  ${s.id} conflict: ${after.map((e) => e.name).join(" → ")}`);
+    }
   } catch (err) {
     console.error(`  ${s.id} failed:`, err);
     error = err instanceof Error ? err.message : String(err);
@@ -128,6 +169,8 @@ async function runOne(sql: Sql, s: ScenarioFile): Promise<Score> {
     proposalsMissing: [],
     forbiddenProposals: [],
     fabricatedSources: 0,
+    outboxLeaks: 0,
+    checksFailed: [],
     costUsd: 0,
     ticksToContain: null,
     spreadReached: null,
@@ -157,9 +200,11 @@ async function main() {
       rootCause: show(s.rootCauseCorrect),
       citesCause: show(s.citesCauseObject),
       fabricated: s.fabricatedSources,
+      outboxLeaks: s.outboxLeaks,
       missingAgents: s.agentsMissing.join(", ") || "-",
       missingProposals: s.proposalsMissing.join("; ") || "-",
       forbidden: s.forbiddenProposals.join(", ") || "-",
+      checks: s.checksFailed.join("; ") || "-",
       costUsd: s.costUsd.toFixed(3),
       seconds: Math.round(s.durationMs / 1000),
       error: s.error ?? "-",

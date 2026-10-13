@@ -63,6 +63,42 @@ export const HoldApproved = IncidentScoped.extend({
   codes: z.array(z.string()),
 });
 export const ShortfallDetected = IncidentScoped.extend({ orderCode: z.string() });
+export const RootCauseAccepted = IncidentScoped.extend({ decisionRecordId: z.uuid() });
+/** Sent by the approval gate when a decision waits too long; it notifies, never moves authority. */
+export const IncidentEscalated = IncidentScoped.extend({
+  decisionRecordId: z.uuid(),
+  owner: z.string(),
+  notify: z.string(),
+  reason: z.string(),
+});
+
+// ─── Orders ───
+
+/** A person (or a scenario) logged an order; the Order Desk checks it. */
+export const OrderReceived = WorldScoped.extend({ orderId: z.uuid() });
+/** Code judged an order urgent (patient-critical or due soon, and not covered); the Scheduler plans it. */
+export const OrderUrgent = WorldScoped.extend({ orderCode: z.string(), orderDeskDecisionId: z.uuid() });
+/** The Devil's Advocate challenged a proposed root cause. */
+export const ChallengeRaised = IncidentScoped.extend({ decisionRecordId: z.uuid(), challengesDecisionId: z.uuid() });
+
+// ─── Decision Board and coordination ───
+
+/** A seat raised a conflict; the Event Council advises the Executive. conflictId is the event id. */
+export const BoardConvened = IncidentScoped.extend({
+  conflictId: z.string().regex(/^\d+$/),
+  summary: z.string(),
+  fromSeat: SeatRole,
+  withSeat: SeatRole,
+});
+/** A person resumed a paused incident; its waiting handlers continue. */
+export const IncidentResumed = IncidentScoped;
+
+// ─── Regulatory and communications ───
+
+/** Regulatory Affairs confirmed a reporting obligation; the deadline is on the obligation row. */
+export const ObligationConfirmed = IncidentScoped.extend({ obligationId: z.uuid(), ruleCode: z.string() });
+/** An approved message in a live world is ready for the outbox to deliver. */
+export const OutboundReady = z.object({ worldId: z.uuid(), messageId: z.uuid() });
 
 // ─── Approvals ───
 

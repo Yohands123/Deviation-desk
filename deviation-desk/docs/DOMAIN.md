@@ -38,6 +38,24 @@ its row id (`{ table: "batches", code: "A-2231" }`).
 - `incidents`, `incident_events` (append-only timeline), `tasks`, `evidence`.
 - `agent_runs`, `decision_records`, `approvals`.
 
+**Regulatory, communications and capacity** (Phase 7)
+- `contacts` — who messages go to (customers, trial sites, suppliers, staff, the regulator).
+- `regulatory_rules` — the reporting library (fictional in the demo): when a rule applies, deadline
+  in hours, whether the clock starts at awareness or at confirmation, required documents.
+- `regulatory_obligations` — rules Regulatory Affairs confirmed for an incident, with the computed
+  due time, its task and the approved submission.
+- `outbound_messages` — the outbox: every approved message as approved; only delivery fields change.
+- `capacity_resources` — fill lines (a batch per line per day), sterility test incubator slots
+  (concurrent, held for the test period), QA batch reviews per day, dock dispatches per day.
+- `products.unit_price_usd`, `orders.logged_by` / `logged_at`, `people.standing_seat` (who decides
+  outside incidents).
+
+**Planning and learning** (Phase 7)
+- `investment_options` — the price list for changes (line, test slots, QA, backup supplier, DC).
+- `expansion_proposals`, `expansion_simulations` (append-only what-if results), `expansion_decisions`
+  (append-only).
+- `agent_lessons` and `agent_lesson_decisions` (append-only) — lessons for one agent at one company.
+
 **Simulation**
 - `worlds` (`live` | `drill`), `scenarios` (library or builder; runnable once approved),
   `drill_runs` (status, tick, difficulty, seed, facilitator, agents on/off, score),
@@ -82,6 +100,14 @@ Status colors follow `docs/DESIGN.md`. Red/orange is reserved for `critical`.
 `incident/dispatched` (the Dispatcher has chosen the agents), `approval/requested` (a proposal
 awaits a seat's decision), `drill/play` (autoplay a drill: one tick every `seconds_per_tick`),
 `drill/audit-requested` (run the Auditor's end-of-drill review).
+
+Added in Phase 7: `approval/requested` also wakes Regulator A; `obligation/confirmed` (Regulatory
+Affairs confirmed a rule), `outbound/ready` (a live message for the outbox to deliver),
+`board/convened` (a seat raised a conflict), `incident/resumed`, `incident/closed` (the QA Director
+closed it), `order/received`, `order/urgent` (code judged it urgent), `challenge/raised`,
+`expansion/sweep` (weekly review), `expansion/requested` (a launch question), `audit/sweep` (hourly,
+only with new gaps), `learning/review` (weekly). Unused from the original list: `proposal/created`,
+`capacity/changed`, `expansion/proposed` (the review runs readiness inline).
 
 As built, `drill/ended` is sent when a drill reaches its last hour or the facilitator ends it. A
 drill tick is a function call (`runTick`), not an event; `sim/tick` and `drill/started` are unused.

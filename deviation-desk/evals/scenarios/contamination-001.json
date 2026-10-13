@@ -76,10 +76,14 @@
       "evidence_collector",
       "root_cause_analyst",
       "devils_advocate",
+      "trial_runner",
       "spread_tracker",
       "quarantine_officer",
       "inventory_agent",
-      "rerouter"
+      "rerouter",
+      "regulator_a",
+      "regulator_b",
+      "comms_agent"
     ],
     "proposals": [
       {
@@ -99,6 +103,22 @@
         "mentions": [
           "ORD-1045"
         ]
+      },
+      {
+        "actionType": "confirm_reporting_obligation",
+        "mentions": [
+          "NMA-QD-1"
+        ]
+      },
+      {
+        "actionType": "submit_notification",
+        "mentions": [
+          "NMA-QD-1"
+        ]
+      },
+      {
+        "actionType": "run_test",
+        "mentions": []
       }
     ]
   }

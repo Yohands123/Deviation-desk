@@ -10,6 +10,7 @@ import { CITABLE_TABLES } from "@/agents/verify-sources";
 import { getSql, type Sql } from "@/db/client";
 import { GraphTable } from "@/db/rows";
 import { traceImpact } from "@/db/trace-impact";
+import { hoursLeft, worldNow } from "@/regulatory/deadlines";
 import { roomLookup, type RoomsOf } from "./room-lookup";
 import { buildSceneData } from "./scene-data";
 import {
@@ -21,6 +22,9 @@ import {
   type IncidentRoomView,
   type IncidentSummary,
   type MapRoom,
+  type MessageStatus,
+  type MessageView,
+  type ObligationView,
   type SeatView,
   type Severity,
 } from "./types";
@@ -107,9 +111,50 @@ async function loadCards(sql: Sql, worldId: string, incidentId: string, extraIds
         status,
         decision: decision ? { seat: decision.seat, by: decision.by, reason: decision.reason, at: decision.at } : null,
         rejectedSourceCount: r.record.rejectedSources?.length ?? 0,
+        advisories: [],
       },
     ];
   });
+}
+
+/** Attaches Regulator A's advisories (incident events link them) to the proposals they review. */
+function attachAdvisories(cards: AgentCard[], events: Array<Pick<EventRow, "eventType" | "payload">>): void {
+  const byId = new Map(cards.map((c) => [c.decisionRecordId, c]));
+  for (const e of events) {
+    if (e.eventType !== "advisory_added") continue;
+    const target = byId.get(String(e.payload.reviewsDecisionId));
+    const advisory = byId.get(String(e.payload.advisoryDecisionId));
+    if (!target || !advisory) continue;
+    target.advisories.push({ decisionRecordId: advisory.decisionRecordId, agentName: advisory.agentName, summary: advisory.summary, reasoning: advisory.reasoning });
+  }
+}
+
+/** Confirmed obligations with their deadlines in the world's clock, and every approved message. */
+async function loadRegulatory(sql: Sql, worldId: string, incidentId: string): Promise<IncidentRoomView["regulatory"]> {
+  const messages = await sql<Array<Omit<MessageView, "label" | "to" | "createdAt"> & { recipients: Array<{ name: string }>; createdAt: Date }>>`
+    select id, action_type, audience, recipients, subject, body, status, last_error, created_at
+    from outbound_messages where world_id = ${worldId} and incident_id = ${incidentId} order by created_at`;
+  const rows = await sql<
+    Array<{ id: string; ruleCode: string; title: string; authority: string; fictional: boolean; clockStartedAt: Date; dueAt: Date; status: MessageStatus | null; subject: string | null }>
+  >`
+    select o.id, r.code as rule_code, r.title, r.authority, r.fictional, o.clock_started_at, o.due_at, m.status, m.subject
+    from regulatory_obligations o
+    join regulatory_rules r on r.world_id = o.world_id and r.id = o.rule_id
+    left join outbound_messages m on m.world_id = o.world_id and m.id = o.submitted_message_id
+    where o.world_id = ${worldId} and o.incident_id = ${incidentId}
+    order by o.due_at`;
+  const now = rows.length > 0 ? await worldNow(sql, worldId) : new Date();
+  const obligations: ObligationView[] = rows.map(({ status, subject, ...o }) => ({
+    ...o,
+    clockStartedAt: iso(o.clockStartedAt),
+    dueAt: iso(o.dueAt),
+    hoursLeft: hoursLeft(o.dueAt, now),
+    submission: status && subject ? { status, subject } : null,
+  }));
+  return {
+    obligations,
+    messages: messages.map(({ recipients, createdAt, ...m }) => ({ ...m, label: actionLabel(m.actionType), to: recipients.map((r) => r.name), createdAt: iso(createdAt) })),
+  };
 }
 
 // ─── Flat map ────────────────────────────────────────────────────────
@@ -177,6 +222,7 @@ export async function getIncidentRoom(
   const triageId = typeof opened?.payload.triageDecisionId === "string" ? opened.payload.triageDecisionId : null;
 
   const cards = await loadCards(sql, w, incident.id, triageId ? [triageId] : []);
+  attachAdvisories(cards, events);
   const people = await sql<{ id: string; name: string }[]>`select id, name from people where world_id = ${w}`;
   const personName = new Map(people.map((p) => [p.id, p.name]));
 
@@ -233,13 +279,23 @@ export async function getIncidentRoom(
         withSeat: (e.payload.withSeat as SeatRole) ?? "executive",
         summary: String(e.payload.summary ?? ""),
         resolution: r ? { by: personName.get(r.actorId) ?? "Someone", note: String(r.payload.note ?? ""), at: r.at } : null,
+        votes: events
+          .filter((v) => v.eventType === "council_vote" && String(v.payload.conflictId) === e.id)
+          .map((v) => ({
+            member: AGENT_NAMES.get(v.actorId) ?? v.actorId,
+            favors: (["raising_seat", "other_seat"].includes(String(v.payload.favors)) ? v.payload.favors : "neither") as ConflictItem["votes"][number]["favors"],
+            position: String(v.payload.position ?? ""),
+            decisionRecordId: String(v.payload.decisionRecordId ?? ""),
+          })),
       };
     });
+  const lastPause = incident.status === "paused" ? events.filter((e) => e.eventType === "paused").at(-1) : undefined;
 
   const roomsOf = await roomLookup(sql, w);
   const { map, spreadPaths } = await buildMap(sql, w, objects, roomsOf);
   const pendingForMe = pendingFor(mySeat, cards);
   const scene = await buildSceneData(sql, w, { map, cards, seats, mySeat }, roomsOf);
+  const regulatory = await loadRegulatory(sql, w, incident.id);
   return {
     incident: toSummary({ ...incident, pendingDecisions: cards.filter(isOpen).length }),
     objects: objects.map(({ table, code: c }) => ({ table, code: c })),
@@ -252,6 +308,8 @@ export async function getIncidentRoom(
     map,
     spreadPaths,
     conflicts,
+    paused: lastPause ? { reason: String(lastPause.payload.reason ?? ""), at: lastPause.at } : incident.status === "paused" ? { reason: "", at: iso(incident.openedAt) } : null,
+    regulatory,
     scene,
   };
 }

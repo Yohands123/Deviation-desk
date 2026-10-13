@@ -75,6 +75,43 @@ export interface AgentCard {
   status: DecisionStatus;
   decision: { seat: SeatRole; by: string | null; reason: string | null; at: string } | null;
   rejectedSourceCount: number;
+  /** Regulator A's advice on this proposal (critical incidents). Advice, never a ruling. */
+  advisories: Advisory[];
+}
+
+export interface Advisory {
+  decisionRecordId: string;
+  agentName: string;
+  summary: string;
+  reasoning: string;
+}
+
+export interface ObligationView {
+  id: string;
+  ruleCode: string;
+  title: string;
+  authority: string;
+  fictional: boolean;
+  clockStartedAt: string;
+  dueAt: string;
+  /** Hours until due in the world's clock; negative once overdue. */
+  hoursLeft: number;
+  submission: { status: MessageStatus; subject: string } | null;
+}
+
+export type MessageStatus = "ready" | "sent" | "failed" | "not_configured" | "drill";
+
+export interface MessageView {
+  id: string;
+  actionType: string;
+  label: string;
+  audience: string;
+  to: string[];
+  subject: string;
+  body: string;
+  status: MessageStatus;
+  lastError: string | null;
+  createdAt: string;
 }
 
 export interface FeedItem {
@@ -119,6 +156,15 @@ export interface ConflictItem {
   withSeat: SeatRole;
   summary: string;
   resolution: { by: string; note: string; at: string } | null;
+  /** The Event Council's advice: one vote per member. */
+  votes: CouncilVote[];
+}
+
+export interface CouncilVote {
+  member: string;
+  favors: "raising_seat" | "other_seat" | "neither";
+  position: string;
+  decisionRecordId: string;
 }
 
 export interface IncidentRoomView {
@@ -133,6 +179,10 @@ export interface IncidentRoomView {
   map: MapRoom[];
   spreadPaths: string[];
   conflicts: ConflictItem[];
+  /** Set while the incident is paused (the Coordinator proposed it, the Executive approved). */
+  paused: { reason: string; at: string } | null;
+  /** Confirmed reporting obligations and the outbox. */
+  regulatory: { obligations: ObligationView[]; messages: MessageView[] };
   /** Everything the voxel world draws. */
   scene: SceneData;
 }

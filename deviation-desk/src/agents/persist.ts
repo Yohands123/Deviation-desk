@@ -21,13 +21,23 @@ export interface RunRow {
   status: RunStatus;
 }
 
-/** Cost this agent has already spent on this incident. Runs without an incident are budgeted one at a time. */
-export async function spentOnIncident(sql: Sql, worldId: string, agentId: string, incidentId: string | null): Promise<number> {
-  if (incidentId === null) return 0;
-  const [row] = await sql<{ spent: number }[]>`
-    select coalesce(sum(cost_usd), 0)::float8 as spent from agent_runs
-    where world_id = ${worldId} and agent_id = ${agentId} and incident_id = ${incidentId}`;
-  return row?.spent ?? 0;
+/** Runs outside any incident (orders, planning, learning) share a rolling daily budget per agent. */
+export const NO_INCIDENT_DAILY_RUNS = 10;
+
+/**
+ * What this agent has spent against its budget, and the budget. On an incident: everything it spent
+ * on that incident, against costBudgetUsd. Outside incidents: what it spent in this world in the last
+ * 24 hours, against costBudgetUsd × NO_INCIDENT_DAILY_RUNS.
+ */
+export async function budgetUse(sql: Sql, worldId: string, agentId: string, incidentId: string | null, costBudgetUsd: number): Promise<{ spent: number; limit: number }> {
+  const [row] = incidentId
+    ? await sql<{ spent: number }[]>`
+        select coalesce(sum(cost_usd), 0)::float8 as spent from agent_runs
+        where world_id = ${worldId} and agent_id = ${agentId} and incident_id = ${incidentId}`
+    : await sql<{ spent: number }[]>`
+        select coalesce(sum(cost_usd), 0)::float8 as spent from agent_runs
+        where world_id = ${worldId} and agent_id = ${agentId} and incident_id is null and created_at > now() - interval '24 hours'`;
+  return { spent: row?.spent ?? 0, limit: incidentId ? costBudgetUsd : costBudgetUsd * NO_INCIDENT_DAILY_RUNS };
 }
 
 function runValues(run: RunRow) {

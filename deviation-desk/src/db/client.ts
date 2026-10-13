@@ -19,7 +19,12 @@ export function getSql(): Sql {
         "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
     );
   }
+  // Hosted: Supabase's transaction pooler (port 6543) cannot use prepared statements, and each
+  // serverless instance keeps only a few connections.
+  const pooler = /:6543\//.test(url) || /[?&]pgbouncer=true/.test(url);
   pool = postgres(url, {
+    prepare: !pooler,
+    max: process.env.VERCEL ? 3 : 10,
     transform: postgres.camel,
     onnotice: (n) => console.info(`[postgres] ${String(n.message)}`),
   });

@@ -9,6 +9,8 @@ import type { Viewer } from "@/incident-room/viewer";
 import { AiMarker, Mono, Panel, SeverityPill, timeLabel } from "../ui";
 import { SiteView } from "../voxel/site-view";
 import { AgentCard } from "./agent-card";
+import { AuditorPanel } from "./auditor-panel";
+import { CloseIncident } from "./close-incident";
 import { DecisionBoard } from "./decision-board";
 import { DecisionCard } from "./decision-card";
 import { EvidencePanel } from "./evidence-panel";
@@ -16,6 +18,8 @@ import { FlatMap } from "./flat-map";
 import { LiveFeed } from "./live-feed";
 import { RealtimeRefresh } from "./realtime-refresh";
 import { SeatPicker } from "./seat-picker";
+import { PausedBanner } from "./paused-banner";
+import { RegulatoryPanel } from "./regulatory";
 import { PeopleInRoom, YourSeat } from "./seats-panel";
 import { SourceDrawerProvider } from "./source-drawer";
 
@@ -70,6 +74,7 @@ export function IncidentRoomScreen({ viewer, room, world, roomPath, back, seatCh
   return (
     <SourceDrawerProvider world={world}>
       {header}
+      {room.paused && <PausedBanner code={incident.code} paused={room.paused} mySeat={room.mySeat} world={world} />}
       {engineDown && (
         <p className="border-b border-at-risk bg-at-risk-fill px-4 py-2 text-sm text-at-risk-text">
           The incident is open, but the workflow engine is not running, so agents have not started. Start it with <span className="font-mono">npm run inngest</span>.
@@ -139,10 +144,11 @@ export function IncidentRoomScreen({ viewer, room, world, roomPath, back, seatCh
           <Panel title="Decision Board">
             <DecisionBoard code={incident.code} conflicts={room.conflicts} mySeat={room.mySeat} world={world} />
           </Panel>
-          <section className="rounded-lg border border-line bg-auditor-bg p-4" aria-label="Auditor">
-            <h2 className="text-sm font-semibold text-auditor">Auditor</h2>
-            <p className="mt-1 text-sm text-muted">{auditorNote}</p>
-          </section>
+          <Panel title="Regulatory and messages">
+            <RegulatoryPanel obligations={room.regulatory.obligations} messages={room.regulatory.messages} />
+          </Panel>
+          <AuditorPanel cards={room.cards} note={auditorNote} />
+          {room.mySeat === "qa_director" && incident.status !== "closed" && world === null && <CloseIncident code={incident.code} world={world} />}
         </div>
       </main>
     </SourceDrawerProvider>

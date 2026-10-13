@@ -18,6 +18,11 @@ import { listAgents } from "./list-agents";
 import { listEvidence } from "./list-evidence";
 import { optimizeRoutes } from "./optimize-routes";
 import { queryTwin } from "./query-twin";
+import { getContacts, listObligations, searchRegulatoryLibrary } from "./regulatory-tools";
+import { getCapacityTool, getCosts, getResources } from "./capacity-tools";
+import { getOrder, optimizeSchedule } from "./order-tools";
+import { getDemand, getInvestmentOptions, getNetwork, getProposal, listProposals } from "./expansion-tools";
+import { getAgentPrompt, getPushback, getTrackRecords } from "./learning-tools";
 import { searchSops } from "./search-sops";
 import { traceImpact } from "./trace-impact";
 import type { AgentTool } from "./types";
@@ -43,6 +48,22 @@ const all = [
   getIncidentTimeline,
   getDrillFacts,
   getHiddenTruth,
+  searchRegulatoryLibrary,
+  getContacts,
+  listObligations,
+  getCapacityTool,
+  getCosts,
+  getResources,
+  getOrder,
+  optimizeSchedule,
+  getDemand,
+  getNetwork,
+  getInvestmentOptions,
+  listProposals,
+  getProposal,
+  getTrackRecords,
+  getPushback,
+  getAgentPrompt,
 ] as unknown as AgentTool[];
 
 /** Registry of all tools by name. Agents only receive the ones in their allowedTools. */

@@ -62,7 +62,7 @@ export const drillAudit = inngest.createFunction(
         agent: config,
         agentVersion: version,
         ctx: { worldId: run.worldId, companyId: run.companyId, incidentId: run.incidentId, agentId: "auditor" },
-        task: `The drill "${run.title}" has ended after ${run.tick} simulated hours. Review it and grade each seat and the team.`,
+        task: `Review 3 (a drill has ended): the drill "${run.title}" ended after ${run.tick} simulated hours. Review it and grade each seat and the team.`,
       });
       return { decisionRecordId: result.decisionRecordId, status: result.status };
     });

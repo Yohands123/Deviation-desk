@@ -1,5 +1,6 @@
 import type { AgentCard as Card } from "@/incident-room/types";
 import { AiMarker, ConfidenceMeter, DecisionStatusBadge, timeLabel } from "../ui";
+import { Advisories } from "./regulatory";
 import { SourceChips } from "./source-drawer";
 
 const KIND: Record<Card["kind"], string> = {
@@ -40,6 +41,7 @@ export function AgentCard({ card }: { card: Card }) {
       <div className="mt-2">
         <SourceChips sources={card.sources} />
       </div>
+      <Advisories items={card.advisories} />
       {card.rejectedSourceCount > 0 && (
         <p className="mt-2 text-xs text-at-risk-text">
           {card.rejectedSourceCount} cited source{card.rejectedSourceCount > 1 ? "s" : ""} could not be verified and {card.rejectedSourceCount > 1 ? "were" : "was"} removed.

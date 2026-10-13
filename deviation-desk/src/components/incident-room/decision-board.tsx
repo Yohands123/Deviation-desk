@@ -1,14 +1,36 @@
 "use client";
 /**
  * The Decision Board: conflicts between seats, for the Executive to settle. The Event Council
- * (operations, finance and safety advisers) joins it in Phase 7.
+ * (operations, finance and safety) votes on each one; votes are advice, the Executive decides.
  */
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { SeatRole } from "@/agents/contract";
 import { raiseConflict, resolveConflict } from "@/incident-room/actions";
-import { LIVE_SEATS, SEAT_LABELS, type ConflictItem } from "@/incident-room/types";
-import { cx, timeLabel } from "../ui";
+import { LIVE_SEATS, SEAT_LABELS, type ConflictItem, type CouncilVote } from "@/incident-room/types";
+import { AiMarker, cx, timeLabel } from "../ui";
+
+function sideOf(vote: CouncilVote, c: ConflictItem): string {
+  if (vote.favors === "raising_seat") return `Sides with ${SEAT_LABELS[c.fromSeat]}`;
+  if (vote.favors === "other_seat") return `Sides with ${SEAT_LABELS[c.withSeat]}`;
+  return "Neither side";
+}
+
+function CouncilVotes({ conflict }: { conflict: ConflictItem }) {
+  if (conflict.votes.length === 0) return null;
+  return (
+    <div className="mt-2 rounded bg-ai-tint p-2">
+      <AiMarker label="Event Council · advice" />
+      <ul className="mt-1 space-y-1">
+        {conflict.votes.map((v) => (
+          <li key={v.decisionRecordId}>
+            <span className="font-medium">{v.member.replace(/^Council: /, "")}</span>: <span className="text-muted">{sideOf(v, conflict)}.</span> {v.position}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function DecisionBoard({ code, conflicts, mySeat, world }: { code: string; conflicts: ConflictItem[]; mySeat: SeatRole | null; world?: string | null }) {
   const router = useRouter();
@@ -48,6 +70,7 @@ export function DecisionBoard({ code, conflicts, mySeat, world }: { code: string
                 {SEAT_LABELS[c.fromSeat]} ({c.raisedBy}) with {SEAT_LABELS[c.withSeat]} · {timeLabel(c.at)}
               </p>
               <p className="mt-1">{c.summary}</p>
+              <CouncilVotes conflict={c} />
               {c.resolution ? (
                 <p className="mt-2 text-ok">
                   Resolved by {c.resolution.by}: {c.resolution.note}

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { browserSupabase } from "@/lib/supabase/browser";
 
-const TABLES = ["incident_events", "decision_records", "approvals", "evidence", "seats"] as const;
+const TABLES = ["incident_events", "decision_records", "approvals", "evidence", "seats", "regulatory_obligations", "outbound_messages"] as const;
 
 export function RealtimeRefresh({ incidentId }: { incidentId: string }) {
   const router = useRouter();

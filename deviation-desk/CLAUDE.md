@@ -187,7 +187,8 @@ deviation-desk/
 ├── supabase/config.toml      ← local Supabase stack (npm run db:start)
 ├── src/
 │   ├── app/                  ← Next.js routes: /login, /incidents, /incidents/[code], /report,
-│   │                           /drills, /drills/new, /drills/[id] (console, room, debrief)
+│   │                           /drills, /drills/new, /drills/[id] (console, room, debrief),
+│   │                           /orders, /strategy, /agents
 │   ├── components/           ← UI components: incident-room/, voxel/ (R3F scene, site view), drills/
 │   ├── voxel/                ← voxel models, scene building, roles (pure, unit-tested)
 │   ├── incident-room/        ← viewer/session, room queries, view model, server actions (world-aware)
@@ -202,10 +203,17 @@ deviation-desk/
 │   ├── workflows/            ← event handlers, Inngest functions, approval gate, local runner
 │   ├── approvals/            ← recording decisions, seats, executors, escalation
 │   ├── monitoring/           ← Layer-1 watchers (non-AI rules)
+│   ├── oversight/            ← the Auditor's hourly rule checks
+│   ├── comms/                ← the outbox: recipients, queueing, signed webhook delivery
+│   ├── regulatory/           ← deadline arithmetic in the world's clock
+│   ├── logistics/            ← order logging and urgency, supply assignment, order planning
+│   ├── orders/               ← Orders page queries and actions
+│   ├── expansion/            ← change specs, pricing, what-if simulation, proposals, decisions
+│   ├── learning/             ← track records, pushback, lessons, Agents page actions
 │   ├── sim/                  ← scenario schema + validation, PRNG, spread, saboteurs, modes, AI
 │   │                           seats, tick engine, effects log, drill lifecycle, scoring, library
 │   ├── db/                   ← Postgres client, migrations, typed queries, trace, cloning, seed
-│   └── lib/                  ← shared utilities (optimizer client)
+│   └── lib/                  ← shared utilities (optimizer client: /allocate, /schedule)
 ├── e2e/                      ← Playwright tests (own fixture company)
 ├── evals/
 │   ├── scenarios/            ← seeded scenario fixtures with hidden truths
@@ -634,9 +642,51 @@ Phase 6 notes:
   reverse, live refused, scoring) and a Playwright drill run (agents off).
 
 ### Phase 7 — Council, regulatory, comms, expansion, learning
-- [ ] Event Council, Regulator A/B, Comms Agent, Coordinator, Order Desk, Scheduler.
-- [ ] Expansion department and "simulate before you build".
-- [ ] Learning Loop and agent track records.
+- [x] Event Council, Regulator A/B, Comms Agent, Coordinator, Order Desk, Scheduler.
+- [x] Expansion department and "simulate before you build".
+- [x] Learning Loop and agent track records.
+
+Phase 7 notes:
+- Migrations 0006–0010: contacts, a fictional regulatory library, obligations, the outbox; product
+  prices and shared capacity; logged orders; investment price list, expansion proposals,
+  simulations and decisions, standing seats; agent lessons and their decisions.
+- Handlers are split by chain (`src/workflows/*-handlers.ts`), sharing `agent-steps.ts` (decide,
+  approval requests). `decide()` appends a company's approved lessons to an agent's prompt and can
+  run an agent on a cheaper tier (the Auditor's sweep). Runs outside incidents (orders, planning,
+  learning) have a rolling daily budget per agent: 10 × its per-run budget, per world.
+- **Messages leave only through the outbox.** An approved message is stored as approved; with
+  `OUTBOUND_WEBHOOK_URL` set, live messages are POSTed (HMAC-signed with
+  `OUTBOUND_WEBHOOK_SECRET`) by an Inngest function with retries; drill messages never leave.
+  n8n itself is not part of the repo; point the webhook at it.
+- **Regulatory output stays advisory.** Regulator B names a rule; Regulatory Affairs confirms; code
+  computes the deadline from the rule in the world's clock and opens a task. Comms drafts
+  submissions due within a week; later follow-ups wait for the investigation.
+- **The Event Council votes, the Executive decides.** Raising a conflict convenes it (agents on).
+- **Pausing:** the Coordinator proposes pausing a lower-priority incident; on the Executive's
+  approval its agent work waits in Inngest until the Executive resumes it. People's decisions still
+  execute. The local runner (evals) skips paused work.
+- **Math stays in code.** The optimizer gains `/schedule` (CP-SAT job-shop with shared capacity);
+  `planOrder` turns the twin into jobs (fills, 14-day sterility tests, QA review, dispatch),
+  assigns supply to orders by priority and shows who would be bumped. Costs, capacity, demand,
+  urgency and deadlines are computed in code.
+- **Decisions outside incidents** (expansion, lessons) are checked against `people.standing_seat`
+  and recorded append-only. Spend of $250,000 or more needs the Executive as well as Strategy &
+  Growth.
+- **Simulate before you build:** each proposal runs a fixed stress suite on two drill-kind copies
+  (archived after), with and without the change. It is code and the optimizer only, about 20 s, and
+  costs nothing in model calls.
+- **Oversight:** the hourly audit runs rule checks first and wakes the Auditor only for new gaps;
+  the QA Director closes incidents (nothing may be waiting) and the Auditor grades the response.
+  The Learning Loop runs weekly only when people pushed back at least twice in 30 days.
+- **Evals:** eight scenarios. New ones: `two-incidents-001` (Coordinator and Council),
+  `orders-001`, `expansion-001` and `learning-001`, all eval-only (`evalOnly` keeps them out of the
+  drill library). `contamination-001` now also expects Regulator A/B, Comms and the Trial Runner.
+  The harness supports background incidents, scripted conflicts, and an outbox-leak check (any
+  message not marked "drill" fails the run).
+- **Tests:** unit tests for assignment, urgency, comparison and action params; database tests for
+  the outbox, obligations, pausing, capacity and costs, order planning, expansion and simulation,
+  lessons, track records and audit checks.
+- **E2E (Phase 7 screens):** written by Codex from `docs/handoff/codex-phase7-e2e.md`.
 
 ---
 

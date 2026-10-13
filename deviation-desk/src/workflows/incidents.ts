@@ -122,3 +122,16 @@ export async function firstTime(sql: Sql, scope: { worldId: string; companyId: s
   await addIncidentEvent(sql, scope, { actorType: "system", actorId: "workflow", eventType: "dedupe", payload: { key } });
   return true;
 }
+
+/** A paused incident's agent work waits until a person resumes it (the Coordinator proposes pauses). */
+export async function isPaused(sql: Sql, worldId: string, incidentId: string): Promise<boolean> {
+  const [row] = await sql<{ status: string }[]>`select status from incidents where world_id = ${worldId} and id = ${incidentId}`;
+  return row?.status === "paused";
+}
+
+/**
+ * Events whose handlers run even while their incident is paused: carrying out a decision a person
+ * already made, and the resume itself.
+ */
+export const RUNS_WHILE_PAUSED = new Set(["decision/resolved", "incident/resumed"]);
+

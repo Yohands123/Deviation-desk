@@ -14,6 +14,7 @@
  */
 import type { Sql, TransactionSql } from "../client";
 import { createRng } from "../../sim/prng";
+import { seedReferenceData } from "./reference-data";
 
 export const HELIX_COMPANY_NAME = "Helix Biologics";
 export const SEED_ANCHOR = new Date("2026-10-12T09:00:00-04:00");
@@ -451,6 +452,7 @@ export async function seedHelixBiologics(sql: Sql, companyName = HELIX_COMPANY_N
       });
     }
     await tx`insert into records ${tx(records)}`;
+    await seedReferenceData(tx, worldId, companyId);
 
     return { companyId, worldId };
   });

@@ -7,14 +7,23 @@
 import type postgres from "postgres";
 import {
   AcceptRootCauseParams,
+  ConfirmObligationParams,
   ContactSupplierParams,
   HoldBatchParams,
   HoldShipmentParams,
+  MessageParams,
+  PauseIncidentParams,
   RerouteSupplyParams,
+  RunTestParams,
 } from "@/agents/action-params";
+import { queueMessage, resolveRecipients, type Audience } from "@/comms/outbox";
+import { awarenessAt, dueAt, worldNow } from "@/regulatory/deadlines";
 import { AgentAnswer } from "@/agents/contract";
 import type { Sql, TransactionSql } from "@/db/client";
 import type { Emitted } from "@/workflows/events";
+import { ExecutionFailed } from "./execution-failed";
+
+export { ExecutionFailed };
 
 interface Context {
   worldId: string;
@@ -126,10 +135,120 @@ const rerouteSupply: Executor = async (tx, c, raw) => {
   return { result: { orderCode: p.orderCode, shipments: created }, emit: [] };
 };
 
-const contactSupplier: Executor = async (_tx, _c, raw) => {
+// ─── Messages (src/comms/outbox.ts) ───
+
+const messageCtx = (c: Context) => ({ ...scope(c), decisionRecordId: c.decisionRecordId, approvalId: c.approvalId });
+
+/** The outbox delivers ready messages; drill messages stay recorded. */
+const deliveryEvents = (worldId: string, queued: { id: string; status: string }): Emitted[] =>
+  queued.status === "ready" ? [{ name: "outbound/ready", data: { worldId, messageId: queued.id } }] : [];
+
+const contactSupplier: Executor = async (tx, c, raw) => {
   const p = ContactSupplierParams.parse(raw);
-  // Approved, but not sent: outbound messages go through n8n, which arrives in Phase 7.
-  return { result: { supplier: p.supplier, material: p.material, message: p.message, sent: false }, emit: [] };
+  const recipients = await resolveRecipients(tx, c.worldId, [p.supplier], ["supplier"]);
+  const queued = await queueMessage(tx, messageCtx(c), {
+    actionType: "contact_supplier",
+    audience: "supplier",
+    recipients,
+    subject: `Request about ${p.material}`,
+    body: p.message,
+  });
+  return { result: { messageId: queued.id, delivery: queued.status, to: recipients.map((r) => r.name) }, emit: deliveryEvents(c.worldId, queued) };
+};
+
+/** A drafted message to a known audience: resolve the recipients, then queue it exactly as approved. */
+const sendMessage =
+  (actionType: string, audience: Audience): Executor =>
+  async (tx, c, raw) => {
+    const p = MessageParams.parse(raw);
+    const recipients = await resolveRecipients(tx, c.worldId, p.to, [audience]);
+    const queued = await queueMessage(tx, messageCtx(c), { actionType, audience, recipients, subject: p.subject, body: p.message });
+    return { result: { messageId: queued.id, delivery: queued.status, to: recipients.map((r) => r.name) }, emit: deliveryEvents(c.worldId, queued) };
+  };
+
+/** A regulatory submission fulfils a confirmed obligation and closes its task. */
+const submitNotification: Executor = async (tx, c, raw) => {
+  const p = MessageParams.parse(raw);
+  if (!p.ruleCode) throw new ExecutionFailed("A submission must name the rule it fulfils.");
+  const [obligation] = await tx<{ id: string; taskId: string | null; submittedMessageId: string | null }[]>`
+    select o.id, o.task_id, o.submitted_message_id from regulatory_obligations o
+    join regulatory_rules r on r.world_id = o.world_id and r.id = o.rule_id
+    where o.world_id = ${c.worldId} and o.incident_id = ${c.incidentId} and r.code = ${p.ruleCode}`;
+  if (!obligation) throw new ExecutionFailed(`Regulatory Affairs has not confirmed ${p.ruleCode} for this incident.`);
+  if (obligation.submittedMessageId) throw new ExecutionFailed(`A submission for ${p.ruleCode} was already approved.`);
+  const recipients = await resolveRecipients(tx, c.worldId, p.to, ["regulator"]);
+  const queued = await queueMessage(tx, messageCtx(c), { actionType: "submit_notification", audience: "regulator", recipients, subject: p.subject, body: p.message });
+  await tx`update regulatory_obligations set submitted_message_id = ${queued.id} where world_id = ${c.worldId} and id = ${obligation.id}`;
+  if (obligation.taskId) await tx`update tasks set status = 'done' where world_id = ${c.worldId} and id = ${obligation.taskId}`;
+  return { result: { messageId: queued.id, delivery: queued.status, ruleCode: p.ruleCode }, emit: deliveryEvents(c.worldId, queued) };
+};
+
+// ─── Regulatory obligations ───
+
+/** Regulatory Affairs confirmed a rule applies: record it, compute the deadline, open a task. */
+const confirmReportingObligation: Executor = async (tx, c, raw) => {
+  const p = ConfirmObligationParams.parse(raw);
+  const [rule] = await tx<{ id: string; code: string; title: string; authority: string; deadlineHours: number; clockStarts: "awareness" | "confirmation" }[]>`
+    select id, code, title, authority, deadline_hours, clock_starts from regulatory_rules where world_id = ${c.worldId} and code = ${p.ruleCode}`;
+  if (!rule) throw new ExecutionFailed(`There is no rule ${p.ruleCode} in the regulatory library.`);
+  const [existing] = await tx`select 1 from regulatory_obligations where world_id = ${c.worldId} and incident_id = ${c.incidentId} and rule_id = ${rule.id}`;
+  if (existing) throw new ExecutionFailed(`${rule.code} is already confirmed for this incident.`);
+
+  const clockStartedAt = rule.clockStarts === "awareness" ? await awarenessAt(tx, c.worldId, c.incidentId) : await worldNow(tx, c.worldId);
+  const due = dueAt(clockStartedAt, rule.deadlineHours);
+  const [task] = await tx<{ id: string }[]>`
+    insert into tasks ${tx({ ...scope(c), title: `Submit ${rule.code} ${rule.title} to ${rule.authority}`.slice(0, 200), ownerSeat: "regulatory_affairs", dueAt: due })}
+    returning id`;
+  const [obligation] = await tx<{ id: string }[]>`
+    insert into regulatory_obligations ${tx({
+      ...scope(c),
+      ruleId: rule.id,
+      decisionRecordId: c.decisionRecordId,
+      approvalId: c.approvalId,
+      clockStartedAt,
+      dueAt: due,
+      taskId: task?.id ?? null,
+    })}
+    returning id`;
+  if (!obligation) throw new Error("Failed to record the obligation");
+  return {
+    result: { ruleCode: rule.code, clockStartedAt: clockStartedAt.toISOString(), dueAt: due.toISOString() },
+    emit: [{ name: "obligation/confirmed", data: { ...scope(c), obligationId: obligation.id, ruleCode: rule.code } }],
+  };
+};
+
+// ─── Investigation ───
+
+/** QA approved a confirm/rule-out test: it becomes a QA task, due when the test can finish. */
+const runTest: Executor = async (tx, c, raw) => {
+  const p = RunTestParams.parse(raw);
+  const due = new Date((await worldNow(tx, c.worldId)).getTime() + p.durationHours * 3_600_000);
+  const [task] = await tx<{ id: string }[]>`
+    insert into tasks ${tx({ ...scope(c), title: `Run test: ${p.test}`.slice(0, 200), ownerSeat: "qa_director", dueAt: due })}
+    returning id`;
+  return { result: { taskId: task?.id ?? null, test: p.test, targets: p.targets, dueAt: due.toISOString() }, emit: [] };
+};
+
+// ─── Coordination ───
+
+/** Pauses another (or this) incident's agent work; handlers wait until someone resumes it. */
+const pauseIncident: Executor = async (tx, c, raw) => {
+  const p = PauseIncidentParams.parse(raw);
+  const [target] = await tx<{ id: string; status: string }[]>`
+    select id, status from incidents where world_id = ${c.worldId} and code = ${p.incidentCode} for update`;
+  if (!target) throw new ExecutionFailed(`There is no incident ${p.incidentCode}.`);
+  if (target.status !== "open" && target.status !== "contained") throw new ExecutionFailed(`${p.incidentCode} is ${target.status}; only open work can be paused.`);
+  await tx`update incidents set status = 'paused' where world_id = ${c.worldId} and id = ${target.id}`;
+  await tx`insert into incident_events ${tx({
+    worldId: c.worldId,
+    companyId: c.companyId,
+    incidentId: target.id,
+    actorType: "system",
+    actorId: "executor",
+    eventType: "paused",
+    payload: tx.json({ reason: p.reason, decisionRecordId: c.decisionRecordId, approvalId: c.approvalId, previousStatus: target.status }),
+  })}`;
+  return { result: { paused: p.incidentCode, previousStatus: target.status }, emit: [] };
 };
 
 const EXECUTORS: Record<string, Executor> = {
@@ -138,10 +257,15 @@ const EXECUTORS: Record<string, Executor> = {
   accept_root_cause: acceptRootCause,
   reroute_supply: rerouteSupply,
   contact_supplier: contactSupplier,
+  notify_customer: sendMessage("notify_customer", "customer"),
+  notify_trial_site: sendMessage("notify_trial_site", "trial_site"),
+  notify_staff: sendMessage("notify_staff", "internal"),
+  submit_notification: submitNotification,
+  confirm_reporting_obligation: confirmReportingObligation,
+  pause_incident: pauseIncident,
+  run_test: runTest,
 };
 
-/** The approved action cannot be carried out as planned (e.g. stock moved since the proposal). */
-export class ExecutionFailed extends Error {}
 
 const asJson = (value: Record<string, unknown>) => value as postgres.JSONValue;
 

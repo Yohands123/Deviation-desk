@@ -8,6 +8,7 @@ import { resolveRef } from "@/db/resolve-ref";
 import type { Scenario } from "@/sim/scenario";
 import type { Emitted } from "@/workflows/events";
 import { THRESHOLDS } from "@/monitoring/watchers";
+import { logOrder } from "@/logistics/orders";
 
 interface DrillScope {
   worldId: string;
@@ -117,11 +118,80 @@ async function supplierDelay(sql: Sql, scope: DrillScope, trigger: Trigger): Pro
   };
 }
 
+/**
+ * An urgent order arrives (evals only; not a drill trigger, since a drill needs an incident). Targets
+ * the destination location; params: quantity, dueInHours, priority.
+ */
+async function urgentOrder(sql: Sql, scope: DrillScope, trigger: Trigger): Promise<Emitted> {
+  if (trigger.target.table !== "locations") throw new Error("urgent_order targets a destination location");
+  const destinationId = await resolveRef(sql, scope.worldId, trigger.target);
+  const [product] = await sql<{ id: string }[]>`select id from products where world_id = ${scope.worldId} order by name limit 1`;
+  if (!product) throw new Error("No product to order");
+  const order = await logOrder(sql, {
+    worldId: scope.worldId,
+    companyId: scope.companyId,
+    productId: product.id,
+    destinationId,
+    quantity: Number(trigger.params.quantity ?? 500),
+    dueAt: new Date(scope.simClock.getTime() + Number(trigger.params.dueInHours ?? 48) * 3_600_000),
+    priority: (["routine", "high", "patient_critical"].includes(String(trigger.params.priority)) ? trigger.params.priority : "high") as "routine" | "high" | "patient_critical",
+    loggedBy: null,
+    loggedAt: scope.simClock,
+  });
+  return { name: "order/received", data: { worldId: scope.worldId, companyId: scope.companyId, orderId: order.id } };
+}
+
+/** The weekly expansion review (evals only). The target is nominal; the review covers the whole company. */
+async function expansionReview(_sql: Sql, scope: DrillScope): Promise<Emitted> {
+  return { name: "expansion/sweep", data: { worldId: scope.worldId, companyId: scope.companyId } };
+}
+
+/**
+ * The weekly learning review (evals only). Seeds a pushback history in the eval world: the same
+ * correction made three times by the Supply Chain Lead, seated on each incident.
+ */
+async function learningReview(sql: Sql, scope: DrillScope): Promise<Emitted> {
+  const live = { worldId: scope.worldId, companyId: scope.companyId };
+  const tomas = await resolveRef(sql, live.worldId, { table: "people", code: "Tomás Reyes" });
+  // Three separate incidents over three weeks, each with a delivered shipment in the proposed hold.
+  const history = [
+    { daysAgo: 20, shipments: ["SH-115", "SH-119"], reason: "SH-115 was delivered on 9 Oct. You cannot hold a delivered shipment; flag it for a recall assessment." },
+    { daysAgo: 12, shipments: ["SH-117", "SH-115"], reason: "Again: SH-115 is already at Northshore. Delivered stock goes to a recall assessment, not a hold. SH-117 hold is fine." },
+    { daysAgo: 4, shipments: ["SH-115"], reason: "Third time. A hold cannot apply to a delivered shipment (SH-115). Check delivery status before proposing holds." },
+  ];
+  for (const [i, h] of history.entries()) {
+    const at = new Date(Date.now() - h.daysAgo * 86_400_000);
+    const [incident] = await sql<{ id: string }[]>`
+      insert into incidents ${sql({ ...live, code: `DEV-09${i + 1}`, title: `Past quality incident ${i + 1}`, incidentType: "quality", severity: "critical", status: "closed", openedAt: at })} returning id`;
+    if (!incident) throw new Error("fixture");
+    await sql`insert into seats ${sql({ ...live, incidentId: incident.id, role: "supply_chain_lead", personId: tomas })}`;
+    const answer = {
+      kind: "proposal",
+      summary: `Hold shipments ${h.shipments.join(" and ")} that carry stock from batches sharing the suspect lot.`,
+      reasoning: "The shipments carry stock from a batch that shares the suspect material lot.",
+      sources: [{ table: "incidents", rowId: incident.id, note: "The incident" }],
+      confidence: "medium",
+      alternatives: [],
+      requiresApproval: true,
+      approvalSeat: "supply_chain_lead",
+      proposedAction: { type: "hold_shipment", params: { shipments: h.shipments, reason: "Shares the suspect lot" } },
+    };
+    const [d] = await sql<{ id: string }[]>`
+      insert into decision_records ${sql({ ...live, incidentId: incident.id, agentId: "quarantine_officer", record: sql.json({ agentId: "quarantine_officer", incidentId: incident.id, worldId: live.worldId, answer, rejectedSources: [] } as never), requiresApproval: true, createdAt: at })}
+      returning id`;
+    await sql`insert into approvals ${sql({ ...live, decisionRecordId: d?.id, seat: "supply_chain_lead", personId: tomas, outcome: "rejected", reason: h.reason, createdAt: new Date(at.getTime() + 2 * 3_600_000) })}`;
+  }
+  return { name: "learning/review", data: { worldId: scope.worldId, companyId: scope.companyId } };
+}
+
 const TRIGGERS: Record<string, (sql: Sql, scope: DrillScope, trigger: Trigger) => Promise<Emitted>> = {
   sterility_failure: sterilityFailure,
   em_anomaly: emAnomaly,
   temp_excursion: tempExcursion,
   supplier_delay: supplierDelay,
+  urgent_order: urgentOrder,
+  expansion_review: expansionReview,
+  learning_review: learningReview,
 };
 
 export function applyTrigger(sql: Sql, scope: DrillScope, trigger: Trigger): Promise<Emitted> {

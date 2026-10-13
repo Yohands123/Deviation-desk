@@ -32,6 +32,15 @@ export const CITABLE_TABLES = new Set([
   "evidence",
   "tasks",
   "decision_records",
+  "contacts",
+  "regulatory_rules",
+  "regulatory_obligations",
+  "capacity_resources",
+  "investment_options",
+  "expansion_proposals",
+  "expansion_simulations",
+  "approvals",
+  "agent_lessons",
 ]);
 
 export async function verifySources(
