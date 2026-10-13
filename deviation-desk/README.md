@@ -4,7 +4,10 @@ Incident readiness and response for pharma, biotech, and medical device operatio
 A digital twin of the company, a team of single-purpose AI agents, humans in charge of every
 consequential decision, and drills that let teams practice before real incidents.
 
-- **Start here:** `CLAUDE.md` (architecture, rules, build phases)
+- **Overview (pages, agents, drills, optimizer, roadmap):** [`../README.md`](../README.md)
+- **Live demo:** https://deviation-desk.vercel.app (password `helix-demo`)
+- **Architecture and rules:** `CLAUDE.md` (build notes for every phase)
+- **Deployment:** `docs/DEPLOY.md`
 - **Agents:** `docs/AGENTS.md`
 - **Data model and realism:** `docs/DOMAIN.md`
 - **Design system and voxel world:** `docs/DESIGN.md`
