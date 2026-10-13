@@ -22,8 +22,9 @@ export async function createDemoLogins(sql: Sql, worldId: string, domain?: strin
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY;
   if (!url || !secret) throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY are needed to create demo logins.");
-  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(url)) {
-    throw new Error("Demo logins share one password and are only created against a local Supabase.");
+  // A shared password is local-only unless the owner explicitly opts in for a private demo.
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(url) && process.env.ALLOW_HOSTED_DEMO_LOGINS !== "yes") {
+    throw new Error("Demo logins share one password and are only created against a local Supabase (set ALLOW_HOSTED_DEMO_LOGINS=yes to override for a private demo).");
   }
   const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
 

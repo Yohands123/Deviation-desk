@@ -1,0 +1,13 @@
+# Never upload local secrets or heavy local-only folders to Vercel.
+.env
+.env.*
+!.env.example
+.next
+node_modules
+services/optimizer/.venv
+services/optimizer/__pycache__
+evals/.results
+e2e/.fixture.json
+playwright-report
+test-results
+supabase/.temp

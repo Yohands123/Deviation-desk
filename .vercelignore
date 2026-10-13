@@ -1,0 +1,13 @@
+# Never upload local secrets or heavy local-only folders to Vercel.
+deviation-desk/.env
+deviation-desk/.env.*
+!deviation-desk/.env.example
+deviation-desk/.next
+deviation-desk/node_modules
+deviation-desk/services/optimizer/.venv
+deviation-desk/services/optimizer/__pycache__
+deviation-desk/evals/.results
+deviation-desk/e2e/.fixture.json
+deviation-desk/playwright-report
+deviation-desk/test-results
+deviation-desk/supabase/.temp
